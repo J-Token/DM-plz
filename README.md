@@ -1,5 +1,7 @@
 # DM-Plz
 
+**English** | [한국어](./README.ko.md)
+
 **Get Telegram or Discord notifications when Claude Code needs your input.**
 
 Inspired by [call-me](https://github.com/ZeframLou/call-me), DM-Plz lets Claude send you messages via Telegram or Discord when it completes tasks, needs decisions, or wants to report progress. Perfect for long-running tasks where you don't want to watch Claude work.
