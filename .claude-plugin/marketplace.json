@@ -1,0 +1,7 @@
+{
+  "name": "DM-Plz",
+  "version": "1.0.0",
+  "description": "Get Telegram notifications when Claude needs your input",
+  "icon": "📱",
+  "categories": ["productivity", "communication"]
+}
