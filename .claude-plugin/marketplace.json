@@ -1,7 +1,15 @@
 {
-  "name": "DM-Plz",
-  "version": "1.0.0",
-  "description": "Get Telegram notifications when Claude needs your input",
-  "icon": "📱",
-  "categories": ["productivity", "communication"]
+  "owner": {
+    "name": "J-Token",
+    "url": "https://github.com/J-Token"
+  },
+  "plugins": [
+    {
+      "name": "DM-Plz",
+      "version": "1.0.0",
+      "description": "Get Telegram or Discord notifications when Claude needs your input or wants to report progress",
+      "icon": "📱",
+      "categories": ["productivity", "communication"]
+    }
+  ]
 }
