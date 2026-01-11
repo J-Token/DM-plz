@@ -80,7 +80,12 @@ Telegram 또는 Discord 중 선택하세요.
 
 ```bash
 # Claude Code에서 실행
-/plugin marketplace add /Users/jungmin.jo/DM-Plz/dm-plz
+# 로컬에서 설치할 경우
+/plugin marketplace add /path/to/dm-plz
+/plugin install dm-plz@dm-plz
+
+# 또는 GitHub에서 설치할 경우
+/plugin marketplace add yourusername/dm-plz
 /plugin install dm-plz@dm-plz
 ```
 

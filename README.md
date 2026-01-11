@@ -294,6 +294,35 @@ bun install
 bun run dev
 ```
 
+### Testing Your Configuration
+
+Before using the plugin with Claude Code, you can test your configuration:
+
+**Telegram:**
+```bash
+cd server
+export DMPLZ_PROVIDER=telegram
+export DMPLZ_TELEGRAM_BOT_TOKEN="your_token"
+export DMPLZ_TELEGRAM_CHAT_ID="your_chat_id"
+bun run test
+```
+
+**Discord:**
+```bash
+cd server
+export DMPLZ_PROVIDER=discord
+export DMPLZ_DISCORD_BOT_TOKEN="your_token"
+export DMPLZ_DISCORD_CHANNEL_ID="your_channel_id"
+bun run test
+```
+
+The test script will:
+1. Verify your environment variables are set correctly
+2. Test the connection to Telegram/Discord
+3. Send a test message to confirm everything works
+
+### Manual Testing
+
 To test the server manually:
 
 **Telegram:**

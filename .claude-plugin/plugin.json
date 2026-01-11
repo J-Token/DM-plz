@@ -3,8 +3,8 @@
   "version": "2.0.0",
   "description": "Claude sends you Telegram or Discord messages when it needs your input or wants to report progress",
   "author": {
-    "name": "Your Name",
-    "url": "https://github.com/yourusername"
+    "name": "DM-Plz Contributors",
+    "url": "https://github.com/yourusername/dm-plz"
   },
   "repository": "https://github.com/yourusername/dm-plz",
   "license": "MIT",
