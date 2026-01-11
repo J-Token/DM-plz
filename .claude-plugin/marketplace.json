@@ -1,15 +1,18 @@
 {
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "dm-plz-marketplace",
+  "version": "1.0.0",
   "owner": {
     "name": "J-Token",
-    "url": "https://github.com/J-Token"
+    "email": "support@example.com"
   },
   "plugins": [
     {
       "name": "DM-Plz",
       "version": "2.0.0",
       "description": "Get Telegram or Discord notifications when Claude needs your input or wants to report progress",
-      "icon": "📱",
-      "categories": ["productivity", "communication"]
+      "category": "productivity",
+      "source": "."
     }
   ]
 }
