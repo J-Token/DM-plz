@@ -8,11 +8,11 @@
   },
   "plugins": [
     {
-      "name": "DM-Plz",
+      "name": "dm-plz",
       "version": "2.0.0",
       "description": "Get Telegram or Discord notifications when Claude needs your input or wants to report progress",
       "category": "productivity",
-      "source": "J-Token/DM-plz"
+      "source": "./"
     }
   ]
 }
