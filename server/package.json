@@ -1,13 +1,14 @@
 {
   "name": "dm-plz-mcp",
-  "version": "2.0.0",
+  "version": "0.2.0",
   "description": "MCP server that lets Claude send you Telegram or Discord messages",
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
     "start": "bun run src/index.ts",
     "dev": "bun --watch src/index.ts",
-    "test": "bun run test.ts"
+    "test": "bun run test.ts",
+    "mcp": "bun install --silent && bun run src/index.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4"

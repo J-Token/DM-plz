@@ -1,0 +1,7 @@
+{
+  "name": "dm-plz-root",
+  "private": true,
+  "scripts": {
+    "mcp": "cd server && bun install --silent && bun run src/index.ts"
+  }
+}
