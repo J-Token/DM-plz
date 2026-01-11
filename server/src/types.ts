@@ -48,12 +48,22 @@ export interface TelegramChat {
   last_name?: string;
 }
 
+export interface TelegramMessageEntity {
+  type: string;
+  offset: number;
+  length: number;
+  url?: string;
+  user?: TelegramUser;
+}
+
 export interface TelegramMessage {
   message_id: number;
   from?: TelegramUser;
   chat: TelegramChat;
   date: number;
   text?: string;
+  entities?: TelegramMessageEntity[];
+  reply_to_message?: TelegramMessage;
 }
 
 export interface TelegramUpdate {

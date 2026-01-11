@@ -16,6 +16,7 @@ export class TelegramProvider implements MessagingProvider {
   private baseUrl: string;
   private config: ServerConfig;
   private lastUpdateId: number = 0;
+  private botUsername: string = '';
 
   constructor(config: ServerConfig) {
     this.config = config;
@@ -45,6 +46,23 @@ export class TelegramProvider implements MessagingProvider {
     }
   }
 
+  private isBotMentioned(message: TelegramMessage): boolean {
+    // Check if message mentions the bot via @username
+    if (message.entities) {
+      const hasMention = message.entities.some(
+        (entity) => entity.type === 'mention' && message.text?.includes(`@${this.botUsername}`)
+      );
+      if (hasMention) return true;
+    }
+
+    // Check if message is a reply to bot's message
+    if (message.reply_to_message?.from?.username === this.botUsername) {
+      return true;
+    }
+
+    return false;
+  }
+
   async waitForReply(timeoutMs: number): Promise<string> {
     const startTime = Date.now();
     const pollTimeout = 10; // Poll every 10 seconds
@@ -53,10 +71,11 @@ export class TelegramProvider implements MessagingProvider {
     while (Date.now() - startTime < timeoutMs) {
       const updates = await this.getUpdates(currentUpdateId + 1, pollTimeout);
 
-      // Filter messages from the configured chat
+      // Filter messages from the configured chat that mention the bot
       const messages = updates
         .filter((u) => u.message && u.message.chat.id.toString() === this.config.chatId)
-        .map((u) => u.message!);
+        .map((u) => u.message!)
+        .filter((msg) => this.isBotMentioned(msg));
 
       if (messages.length > 0) {
         // Return the first message text
@@ -83,6 +102,9 @@ export class TelegramProvider implements MessagingProvider {
     if (!data.ok) {
       throw new Error(`Telegram API error: ${data.description || 'Unknown error'}`);
     }
+
+    // Store bot username for mention detection
+    this.botUsername = data.result.username;
 
     return {
       name: `Telegram (@${data.result.username})`,
