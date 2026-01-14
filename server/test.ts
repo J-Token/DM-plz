@@ -12,6 +12,9 @@
 import { createProvider } from './src/providers/index.js';
 import type { ServerConfig } from './src/types.js';
 
+/**
+ * 테스트 실행 엔트리 포인트입니다.
+ */
 async function main() {
   console.log('🧪 DM-Plz Configuration Test\n');
 
@@ -62,7 +65,7 @@ async function main() {
     provider,
     botToken,
     chatId,
-    questionTimeoutMs: 180000,
+    questionTimeoutMs: 10800000,
   };
 
   console.log(`Chat/Channel ID: ${chatId}\n`);

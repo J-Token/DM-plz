@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "dm-plz-marketplace",
-  "version": "1.0.0",
+  "version": "0.9.2",
   "owner": {
     "name": "J-Token",
     "email": "support@example.com"
@@ -9,8 +9,8 @@
   "plugins": [
     {
       "name": "dm-plz",
-      "version": "2.0.0",
-      "description": "Get Telegram or Discord notifications when Claude needs your input or wants to report progress",
+      "version": "0.9.2",
+      "description": "Get Telegram or Discord notifications when Claude needs your input or wants to report progress (Hook-based, no MCP)",
       "category": "productivity",
       "source": "./"
     }

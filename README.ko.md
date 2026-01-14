@@ -73,6 +73,7 @@
 1. Discord에서 개발자 모드 활성화 (설정 > 고급 > 개발자 모드)
 2. 알림을 받을 채널 우클릭
 3. "ID 복사"를 눌러 **채널 ID** 얻기
+4. (선택) 권한 요청을 DM으로 받고 싶다면 본인 사용자 프로필 우클릭 후 **사용자 ID**도 복사
 
 #### 4. 환경 변수 설정
 
@@ -83,7 +84,9 @@
   "env": {
     "DMPLZ_PROVIDER": "discord",
     "DMPLZ_DISCORD_BOT_TOKEN": "your_discord_bot_token_here",
-    "DMPLZ_DISCORD_CHANNEL_ID": "123456789012345678"
+    "DMPLZ_DISCORD_CHANNEL_ID": "123456789012345678",
+    "DMPLZ_DISCORD_DM_USER_ID": "123456789012345678",
+    "DMPLZ_PERMISSION_CHAT_ID": "123456789012345678"
   }
 }
 ```
@@ -118,7 +121,11 @@ Claude Code를 재시작하면 완료!
 | `DMPLZ_TELEGRAM_CHAT_ID` | 예 (Telegram 사용시) | @userinfobot에서 받은 개인 채팅 ID |
 | `DMPLZ_DISCORD_BOT_TOKEN` | 예 (Discord 사용시) | Discord Developer Portal에서 받은 봇 토큰 |
 | `DMPLZ_DISCORD_CHANNEL_ID` | 예 (Discord 사용시) | 채널 ID (개발자 모드에서 복사) |
-| `DMPLZ_QUESTION_TIMEOUT_MS` | 아니오 (기본값: `180000`) | 응답 대기 시간 제한 (3분) |
+| `DMPLZ_DISCORD_DM_USER_ID` | 아니오 (Discord) | 권한 요청을 DM으로 보낼 사용자 ID |
+| `DMPLZ_PERMISSION_CHAT_ID` | 아니오 | 권한 요청을 보낼 별도 채팅/채널 ID |
+| `DMPLZ_QUESTION_TIMEOUT_MS` | 아니오 (기본값: `10800000`) | 응답 대기 시간 제한 (3시간) |
+
+권한 요청은 `DMPLZ_PERMISSION_CHAT_ID`가 있으면 그 값을 우선 사용하고, 없으면 `DMPLZ_DISCORD_DM_USER_ID`(Discord 전용), 그것도 없으면 기본 채널/채팅으로 전송됩니다.
 
 ---
 
@@ -212,6 +219,62 @@ Claude: send_notification(title: "테스트 완료", message: "250개의 테스�
 플러그인에는 Claude가 작업을 멈췄을 때 알림을 보내야 하는지 자동으로 평가하도록 하는 **Stop 훅**이 포함되어 있습니다. 이는 Claude가 명시적으로 지시받지 않아도 종종 자발적으로 메시지를 보낸다는 의미입니다.
 
 `.claude-plugin/plugin.json`을 편집하여 이 동작을 사용자 정의할 수 있습니다.
+
+### ⚠️ 중요: Stop Hook 충돌
+
+다른 플러그인(예: `oh-my-claude-sisyphus`)도 Stop hook을 가지고 있다면 DM-Plz의 Stop hook과 충돌할 수 있습니다. Claude Code는 하나의 Stop hook 응답만 사용합니다.
+
+**프로젝트에서 다른 Stop hook을 비활성화하려면**, 프로젝트의 `.claude/settings.json`에 다음을 추가하세요:
+
+```json
+{
+  "hooks": {
+    "Stop": []
+  }
+}
+```
+
+이렇게 하면 Claude가 작업을 멈출 때 DM-Plz의 Stop hook만 실행됩니다.
+
+### 🔧 Stop Hook 설치 (Continue 기능에 필요)
+
+Claude Code 버그([#10412](https://github.com/anthropics/claude-code/issues/10412))로 인해 플러그인으로 설치된 Stop hook은 `continueInstruction` 기능을 사용할 수 없습니다. "DM으로 계속하기" 기능을 사용하려면 Stop hook을 직접 설치해야 합니다.
+
+**방법 1: npm 스크립트 사용 (권장)**
+
+```bash
+cd /path/to/dm-plz/server
+bun run install-stop-hook
+```
+
+이 명령은 `~/.claude/settings.json`에 Stop hook을 추가합니다.
+
+**방법 2: 수동 설치**
+
+`~/.claude/settings.json`에 다음을 추가하세요:
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun run \"/path/to/dm-plz/server/src/stop-hook.ts\"",
+            "timeout": 300000
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+`/path/to/dm-plz`를 실제 DM-Plz 설치 경로로 변경하세요.
+
+**설치 후** Claude Code를 재시작하면 변경 사항이 적용됩니다.
 
 ---
 

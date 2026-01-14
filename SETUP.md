@@ -59,6 +59,7 @@ Telegram 또는 Discord 중 선택하세요.
 1. Discord 설정에서 개발자 모드 활성화 (설정 > 고급 > 개발자 모드)
 2. 알림을 받을 채널을 우클릭
 3. "ID 복사"를 클릭하여 **Channel ID** 복사
+4. (선택) 권한 요청을 DM으로 받고 싶다면 본인 사용자 프로필 우클릭 후 **User ID**도 복사
 
 ### 4. 설정 파일 수정
 
@@ -69,7 +70,9 @@ Telegram 또는 Discord 중 선택하세요.
   "env": {
     "DMPLZ_PROVIDER": "discord",
     "DMPLZ_DISCORD_BOT_TOKEN": "여기에_봇_토큰_입력",
-    "DMPLZ_DISCORD_CHANNEL_ID": "여기에_Channel_ID_입력"
+    "DMPLZ_DISCORD_CHANNEL_ID": "여기에_Channel_ID_입력",
+    "DMPLZ_DISCORD_DM_USER_ID": "여기에_User_ID_입력",
+    "DMPLZ_PERMISSION_CHAT_ID": "여기에_권한요청_채널ID_입력"
   }
 }
 ```
@@ -172,9 +175,11 @@ Claude: "배포 완료! 상세 정보를 보내줘"
     // Discord 설정 (DMPLZ_PROVIDER=discord일 때)
     "DMPLZ_DISCORD_BOT_TOKEN": "your_token",
     "DMPLZ_DISCORD_CHANNEL_ID": "your_channel_id",
+    "DMPLZ_DISCORD_DM_USER_ID": "your_user_id",  // 권한 요청을 DM으로 보낼 사용자 ID
 
     // 공통 설정 (선택사항)
-    "DMPLZ_QUESTION_TIMEOUT_MS": "180000"  // 3분 (기본값)
+    "DMPLZ_PERMISSION_CHAT_ID": "your_permission_chat_id",  // 권한 요청을 보낼 별도 채팅/채널 ID
+    "DMPLZ_QUESTION_TIMEOUT_MS": "10800000"  // 3시간 (기본값)
   }
 }
 ```

@@ -1,35 +1,65 @@
 /**
- * Configuration for the DM-Plz MCP server
+ * DM-Plz MCP 서버 설정
  */
 export interface ServerConfig {
+  /**
+   * 사용 플랫폼
+   */
   provider: 'telegram' | 'discord';
+  /**
+   * 봇 토큰
+   */
   botToken: string;
+  /**
+   * 기본 메시지 채팅/채널 ID
+   */
   chatId: string;
+  /**
+   * 질문 응답 대기 시간(밀리초)
+   */
   questionTimeoutMs: number;
+  /**
+   * 권한 요청을 보낼 채팅/채널 ID (선택)
+   */
+  permissionChatId?: string;
+  /**
+   * Discord 권한 요청을 DM으로 보낼 사용자 ID (선택)
+   */
+  discordDmUserId?: string;
 }
 
 /**
- * Provider interface - all messaging providers must implement this
+ * 권한 요청 응답 타입
+ */
+export type PermissionResponse = 'approve' | 'approve_session' | 'reject';
+
+/**
+ * 프로바이더 인터페이스 - 모든 메시징 프로바이더가 구현해야 함
  */
 export interface MessagingProvider {
   /**
-   * Send a message
+   * 메시지 전송
    */
   sendMessage(text: string, parseMode?: 'Markdown' | 'HTML'): Promise<void>;
 
   /**
-   * Wait for a reply from the user
+   * 사용자 응답 대기
    */
   waitForReply(timeoutMs: number): Promise<string>;
 
   /**
-   * Get provider information
+   * 사용자 승인 요청 (승인/거부/세션허용)
+   */
+  requestPermission(message: string, timeoutMs: number): Promise<PermissionResponse>;
+
+  /**
+   * 프로바이더 정보 조회
    */
   getInfo(): Promise<{ name: string; identifier: string }>;
 }
 
 /**
- * Telegram API response types
+ * Telegram API 응답 타입
  */
 export interface TelegramUser {
   id: number;
@@ -66,9 +96,17 @@ export interface TelegramMessage {
   reply_to_message?: TelegramMessage;
 }
 
+export interface TelegramCallbackQuery {
+  id: string;
+  from: TelegramUser;
+  message?: TelegramMessage;
+  data?: string;
+}
+
 export interface TelegramUpdate {
   update_id: number;
   message?: TelegramMessage;
+  callback_query?: TelegramCallbackQuery;
 }
 
 export interface TelegramResponse<T> {
@@ -78,7 +116,7 @@ export interface TelegramResponse<T> {
 }
 
 /**
- * Question state for tracking pending questions
+ * 대기 중인 질문 추적용 상태
  */
 export interface QuestionState {
   questionId: string;
@@ -88,7 +126,7 @@ export interface QuestionState {
 }
 
 /**
- * Discord API response types
+ * Discord API 응답 타입
  */
 export interface DiscordUser {
   id: string;

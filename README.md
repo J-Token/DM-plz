@@ -1,6 +1,6 @@
 # DM-Plz
 
-**English** | [한국어](./README.ko.md)
+**English** | [?�국??(./README.ko.md)
 
 **Get Telegram or Discord notifications when Claude Code needs your input.**
 
@@ -73,6 +73,7 @@ Add these to `~/.claude/settings.json`:
 1. Enable Developer Mode in Discord (Settings > Advanced > Developer Mode)
 2. Right-click the channel where you want notifications
 3. Click "Copy ID" to get your **Channel ID**
+4. (Optional) If you want permission requests in DMs, also copy your **User ID** (right-click your profile)
 
 #### 4. Configure Environment Variables
 
@@ -83,7 +84,9 @@ Add these to `~/.claude/settings.json`:
   "env": {
     "DMPLZ_PROVIDER": "discord",
     "DMPLZ_DISCORD_BOT_TOKEN": "your_discord_bot_token_here",
-    "DMPLZ_DISCORD_CHANNEL_ID": "123456789012345678"
+    "DMPLZ_DISCORD_CHANNEL_ID": "123456789012345678",
+    "DMPLZ_DISCORD_DM_USER_ID": "123456789012345678",
+    "DMPLZ_PERMISSION_CHAT_ID": "123456789012345678"
   }
 }
 ```
@@ -118,7 +121,11 @@ Restart Claude Code. Done!
 | `DMPLZ_TELEGRAM_CHAT_ID` | Yes (for Telegram) | Your personal chat ID from @userinfobot |
 | `DMPLZ_DISCORD_BOT_TOKEN` | Yes (for Discord) | Bot token from Discord Developer Portal |
 | `DMPLZ_DISCORD_CHANNEL_ID` | Yes (for Discord) | Channel ID (enable Developer Mode to copy) |
-| `DMPLZ_QUESTION_TIMEOUT_MS` | No (default: `180000`) | Timeout for waiting for responses (3 minutes) |
+| `DMPLZ_DISCORD_DM_USER_ID` | No (Discord) | User ID for sending permission requests via DM |
+| `DMPLZ_PERMISSION_CHAT_ID` | No | Override chat/channel ID for permission requests |
+| `DMPLZ_QUESTION_TIMEOUT_MS` | No (default: `10800000`) | Timeout for waiting for responses (3 hours) |
+
+Permission requests use `DMPLZ_PERMISSION_CHAT_ID` first if set, otherwise `DMPLZ_DISCORD_DM_USER_ID` (Discord only), and finally the default chat/channel.
 
 ---
 
@@ -126,16 +133,16 @@ Restart Claude Code. Done!
 
 ```
 Claude Code                DM-Plz MCP Server (local)
-    │                              │
-    │  "Task completed!"          │
-    ▼                              ▼
-Plugin ──────stdio───────────► MCP Server
-                                   │
-                                   │ HTTPS
-                                   ▼
+    ??                             ??
+    ?? "Task completed!"          ??
+    ??                             ??
+Plugin ?�?�?�?�?�?�stdio?�?�?�?�?�?�?�?�?�?�?�??MCP Server
+                                   ??
+                                   ??HTTPS
+                                   ??
                     Telegram Bot API / Discord API
-                                   │
-                                   ▼
+                                   ??
+                                   ??
                        Your Telegram / Discord app
 ```
 
@@ -150,7 +157,7 @@ Send a simple notification message.
 
 ```typescript
 await send_message({
-  message: "Build completed successfully! ✅",
+  message: "Build completed successfully! ??,
   parse_mode: "Markdown" // optional
 });
 ```
@@ -172,7 +179,7 @@ Send a notification with a title and detailed message.
 ```typescript
 await send_notification({
   title: "Deployment Complete",
-  message: "Successfully deployed to production\n• 15 files changed\n• 0 errors\n• 2 warnings",
+  message: "Successfully deployed to production\n??15 files changed\n??0 errors\n??2 warnings",
   parse_mode: "Markdown" // optional
 });
 ```
@@ -202,7 +209,7 @@ Claude: *running tests*
 Claude: Uses send_notification(title: "Tests Running", message: "Running 250 tests... this may take a few minutes")
 You: *can go do something else*
 Claude: *finishes tests*
-Claude: Uses send_notification(title: "Tests Complete", message: "All 250 tests passed ✅")
+Claude: Uses send_notification(title: "Tests Complete", message: "All 250 tests passed ??)
 ```
 
 ---
@@ -212,6 +219,62 @@ Claude: Uses send_notification(title: "Tests Complete", message: "All 250 tests 
 The plugin includes a **Stop hook** that automatically prompts Claude to evaluate if it should notify you when it stops working. This means Claude will often proactively message you without being explicitly told to.
 
 You can customize this behavior by editing `.claude-plugin/plugin.json`.
+
+### ⚠️ Important: Stop Hook Conflicts
+
+If you are using other plugins that also have Stop hooks (like `oh-my-claude-sisyphus`), they may conflict with DM-Plz's Stop hook. Only one Stop hook response will be used by Claude Code.
+
+**To disable other Stop hooks in your project**, add this to your project's `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "Stop": []
+  }
+}
+```
+
+This ensures only DM-Plz's Stop hook runs when Claude stops working.
+
+### 🔧 Stop Hook Installation (Required for Continue Feature)
+
+Due to a Claude Code bug ([#10412](https://github.com/anthropics/claude-code/issues/10412)), Stop hooks installed via plugins cannot use the `continueInstruction` feature. To enable the "continue via DM" functionality, you need to install the Stop hook directly.
+
+**Option 1: Using npm script (Recommended)**
+
+```bash
+cd /path/to/dm-plz/server
+bun run install-stop-hook
+```
+
+This will add the Stop hook to your `~/.claude/settings.json`.
+
+**Option 2: Manual installation**
+
+Add this to your `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun run \"/path/to/dm-plz/server/src/stop-hook.ts\"",
+            "timeout": 300000
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Replace `/path/to/dm-plz` with the actual path where DM-Plz is installed.
+
+**After installation**, restart Claude Code for the changes to take effect.
 
 ---
 
@@ -347,22 +410,22 @@ bun run src/index.ts
 
 ```
 dm-plz/
-├── .claude-plugin/
-│   ├── plugin.json          # Plugin configuration
-│   └── marketplace.json     # Marketplace metadata
-├── server/
-│   ├── src/
-│   │   ├── index.ts         # MCP server main
-│   │   ├── types.ts         # Type definitions
-│   │   └── providers/
-│   │       ├── index.ts     # Provider factory
-│   │       ├── telegram.ts  # Telegram implementation
-│   │       └── discord.ts   # Discord implementation
-│   └── package.json
-├── .env.example
-├── .gitignore
-├── README.md
-└── SETUP.md
+?��??� .claude-plugin/
+??  ?��??� plugin.json          # Plugin configuration
+??  ?��??� marketplace.json     # Marketplace metadata
+?��??� server/
+??  ?��??� src/
+??  ??  ?��??� index.ts         # MCP server main
+??  ??  ?��??� types.ts         # Type definitions
+??  ??  ?��??� providers/
+??  ??      ?��??� index.ts     # Provider factory
+??  ??      ?��??� telegram.ts  # Telegram implementation
+??  ??      ?��??� discord.ts   # Discord implementation
+??  ?��??� package.json
+?��??� .env.example
+?��??� .gitignore
+?��??� README.md
+?��??� SETUP.md
 ```
 
 ---
@@ -386,3 +449,4 @@ MIT
   - [telegram-notification-mcp](https://github.com/kstonekuan/telegram-notification-mcp)
   - [claude-telegram-mcp](https://www.npmjs.com/package/@s1lverain/claude-telegram-mcp)
   - [innerVoice](https://github.com/RichardDillman/claude-telegram-bridge)
+
