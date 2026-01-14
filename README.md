@@ -1,6 +1,6 @@
 # DM-Plz
 
-**English** | [?�국??(./README.ko.md)
+**English** | 한국어(./README.ko.md)
 
 **Get Telegram or Discord notifications when Claude Code needs your input.**
 
@@ -114,16 +114,16 @@ Restart Claude Code. Done!
 
 ## Configuration Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DMPLZ_PROVIDER` | No (default: `telegram`) | Platform to use: `telegram` or `discord` |
-| `DMPLZ_TELEGRAM_BOT_TOKEN` | Yes (for Telegram) | Bot token from @BotFather |
-| `DMPLZ_TELEGRAM_CHAT_ID` | Yes (for Telegram) | Your personal chat ID from @userinfobot |
-| `DMPLZ_DISCORD_BOT_TOKEN` | Yes (for Discord) | Bot token from Discord Developer Portal |
-| `DMPLZ_DISCORD_CHANNEL_ID` | Yes (for Discord) | Channel ID (enable Developer Mode to copy) |
-| `DMPLZ_DISCORD_DM_USER_ID` | No (Discord) | User ID for sending permission requests via DM |
-| `DMPLZ_PERMISSION_CHAT_ID` | No | Override chat/channel ID for permission requests |
-| `DMPLZ_QUESTION_TIMEOUT_MS` | No (default: `10800000`) | Timeout for waiting for responses (3 hours) |
+| Variable                    | Required                 | Description                                      |
+| --------------------------- | ------------------------ | ------------------------------------------------ |
+| `DMPLZ_PROVIDER`            | No (default: `telegram`) | Platform to use: `telegram` or `discord`         |
+| `DMPLZ_TELEGRAM_BOT_TOKEN`  | Yes (for Telegram)       | Bot token from @BotFather                        |
+| `DMPLZ_TELEGRAM_CHAT_ID`    | Yes (for Telegram)       | Your personal chat ID from @userinfobot          |
+| `DMPLZ_DISCORD_BOT_TOKEN`   | Yes (for Discord)        | Bot token from Discord Developer Portal          |
+| `DMPLZ_DISCORD_CHANNEL_ID`  | Yes (for Discord)        | Channel ID (enable Developer Mode to copy)       |
+| `DMPLZ_DISCORD_DM_USER_ID`  | No (Discord)             | User ID for sending permission requests via DM   |
+| `DMPLZ_PERMISSION_CHAT_ID`  | No                       | Override chat/channel ID for permission requests |
+| `DMPLZ_QUESTION_TIMEOUT_MS` | No (default: `10800000`) | Timeout for waiting for responses (3 hours)      |
 
 Permission requests use `DMPLZ_PERMISSION_CHAT_ID` first if set, otherwise `DMPLZ_DISCORD_DM_USER_ID` (Discord only), and finally the default chat/channel.
 
@@ -153,6 +153,7 @@ The MCP server runs locally and uses the bot API with polling (no webhooks neede
 ## Tools
 
 ### `send_message`
+
 Send a simple notification message.
 
 ```typescript
@@ -163,24 +164,27 @@ await send_message({
 ```
 
 ### `ask_question`
+
 Ask a question and wait for the user's reply.
 
 ```typescript
 const response = await ask_question({
   question: "I found 3 bugs. Should I fix them now or create issues?",
-  parse_mode: "Markdown" // optional
+  parse_mode: "Markdown", // optional
 });
 // User's response is returned as text
 ```
 
 ### `send_notification`
+
 Send a notification with a title and detailed message.
 
 ```typescript
 await send_notification({
   title: "Deployment Complete",
-  message: "Successfully deployed to production\n??15 files changed\n??0 errors\n??2 warnings",
-  parse_mode: "Markdown" // optional
+  message:
+    "Successfully deployed to production\n??15 files changed\n??0 errors\n??2 warnings",
+  parse_mode: "Markdown", // optional
 });
 ```
 
@@ -189,6 +193,7 @@ await send_notification({
 ## Usage Examples
 
 ### Task Completion Notification
+
 ```
 Claude: *finishes implementing authentication*
 Claude: Uses send_message("Authentication system implemented! Added JWT tokens, login/logout, and password hashing.")
@@ -196,6 +201,7 @@ You: *receive notification on Telegram/Discord*
 ```
 
 ### Interactive Decision Making
+
 ```
 Claude: *finds multiple approaches to solve a problem*
 Claude: Uses ask_question("I can implement caching with Redis or in-memory. Which do you prefer?")
@@ -204,6 +210,7 @@ Claude: *continues with your choice*
 ```
 
 ### Progress Updates
+
 ```
 Claude: *running tests*
 Claude: Uses send_notification(title: "Tests Running", message: "Running 250 tests... this may take a few minutes")
@@ -283,12 +290,14 @@ Replace `/path/to/dm-plz` with the actual path where DM-Plz is installed.
 Both Markdown and HTML formatting are supported:
 
 ### Markdown (Recommended)
+
 ```
 **bold** *italic* `code`
 [link](https://example.com)
 ```
 
 ### HTML
+
 ```
 <b>bold</b> <i>italic</i> <code>code</code>
 <a href="https://example.com">link</a>
@@ -306,31 +315,34 @@ Both Markdown and HTML formatting are supported:
 
 ## Comparison
 
-| Feature | Telegram | Discord |
-|---------|----------|---------|
-| Setup complexity | Very low | Low |
-| Personal DMs | Yes | Yes (via channel) |
-| Markdown support | Yes | Yes (native) |
-| Rate limits | Very generous | Moderate |
-| Polling speed | 10s intervals | 2s intervals |
-| Best for | Personal notifications | Team/server notifications |
+| Feature          | Telegram               | Discord                   |
+| ---------------- | ---------------------- | ------------------------- |
+| Setup complexity | Very low               | Low                       |
+| Personal DMs     | Yes                    | Yes (via channel)         |
+| Markdown support | Yes                    | Yes (native)              |
+| Rate limits      | Very generous          | Moderate                  |
+| Polling speed    | 10s intervals          | 2s intervals              |
+| Best for         | Personal notifications | Team/server notifications |
 
 ---
 
 ## Troubleshooting
 
 ### Claude doesn't use the tools
+
 1. Check all environment variables are set in `~/.claude/settings.json`
 2. Restart Claude Code after installing the plugin
 3. Try explicitly: "Send me a message when you're done."
 
 ### Telegram: Messages not received
+
 1. Verify bot token is correct
 2. Make sure you've started a chat with your bot (send `/start`)
 3. Check the chat ID is your personal chat ID (not a group)
 4. Check MCP server logs with `claude --debug`
 
 ### Discord: Messages not received
+
 1. Verify bot token and channel ID are correct
 2. Make sure the bot has been invited to your server
 3. Check bot has permissions: Send Messages, Read Messages, Read Message History
@@ -338,10 +350,12 @@ Both Markdown and HTML formatting are supported:
 5. Check MCP server logs with `claude --debug`
 
 ### Question timeout
+
 1. Increase `DMPLZ_QUESTION_TIMEOUT_MS` if you need more time to respond
 2. Make sure you're replying in the correct chat/channel
 
 ### API errors
+
 1. Verify token format is correct
 2. Check your internet connection
 3. For Discord: Check bot hasn't been removed from server
@@ -362,6 +376,7 @@ bun run dev
 Before using the plugin with Claude Code, you can test your configuration:
 
 **Telegram:**
+
 ```bash
 cd server
 export DMPLZ_PROVIDER=telegram
@@ -371,6 +386,7 @@ bun run test
 ```
 
 **Discord:**
+
 ```bash
 cd server
 export DMPLZ_PROVIDER=discord
@@ -380,6 +396,7 @@ bun run test
 ```
 
 The test script will:
+
 1. Verify your environment variables are set correctly
 2. Test the connection to Telegram/Discord
 3. Send a test message to confirm everything works
@@ -389,6 +406,7 @@ The test script will:
 To test the server manually:
 
 **Telegram:**
+
 ```bash
 export DMPLZ_PROVIDER=telegram
 export DMPLZ_TELEGRAM_BOT_TOKEN="your_token"
@@ -397,6 +415,7 @@ bun run src/index.ts
 ```
 
 **Discord:**
+
 ```bash
 export DMPLZ_PROVIDER=discord
 export DMPLZ_DISCORD_BOT_TOKEN="your_token"
@@ -449,4 +468,3 @@ MIT
   - [telegram-notification-mcp](https://github.com/kstonekuan/telegram-notification-mcp)
   - [claude-telegram-mcp](https://www.npmjs.com/package/@s1lverain/claude-telegram-mcp)
   - [innerVoice](https://github.com/RichardDillman/claude-telegram-bridge)
-
