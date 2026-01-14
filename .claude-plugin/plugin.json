@@ -1,36 +1,55 @@
 {
   "name": "dm-plz",
-  "version": "0.2.0",
+  "version": "0.9.3",
   "description": "Claude sends you Telegram or Discord messages when it needs your input or wants to report progress",
   "author": {
     "name": "DM-Plz Contributors",
-    "url": "https://github.com/yourusername/dm-plz"
+    "url": "https://github.com/J-Token/DM-plz"
   },
-  "repository": "https://github.com/yourusername/dm-plz",
+  "repository": "https://github.com/J-Token/DM-plz",
   "license": "MIT",
   "keywords": ["telegram", "discord", "notification", "messaging", "alerts"],
-  "mcpServers": {
-    "dm-plz": {
-      "command": "bun",
-      "args": ["run", "mcp"],
-      "cwd": "${CLAUDE_PLUGIN_ROOT}/server",
-      "env": {
-        "DMPLZ_PROVIDER": "${DMPLZ_PROVIDER:-telegram}",
-        "DMPLZ_TELEGRAM_BOT_TOKEN": "${DMPLZ_TELEGRAM_BOT_TOKEN:-}",
-        "DMPLZ_TELEGRAM_CHAT_ID": "${DMPLZ_TELEGRAM_CHAT_ID:-}",
-        "DMPLZ_DISCORD_BOT_TOKEN": "${DMPLZ_DISCORD_BOT_TOKEN:-}",
-        "DMPLZ_DISCORD_CHANNEL_ID": "${DMPLZ_DISCORD_CHANNEL_ID:-}",
-        "DMPLZ_QUESTION_TIMEOUT_MS": "${DMPLZ_QUESTION_TIMEOUT_MS:-180000}"
-      }
-    }
-  },
   "hooks": {
-    "Stop": [
+    "PreToolUse": [
       {
+        "matcher": "AskUserQuestion",
         "hooks": [
           {
-            "type": "prompt",
-            "prompt": "Evaluate if Claude should notify the user to report progress or ask for what to do next. If yes, use the send_message or ask_question tool."
+            "type": "command",
+            "command": "bun run ${CLAUDE_PLUGIN_ROOT}/server/src/question-hook.ts",
+            "timeout": 300000,
+            "env": {
+              "DMPLZ_PROVIDER": "${DMPLZ_PROVIDER:-telegram}",
+              "DMPLZ_TELEGRAM_BOT_TOKEN": "${DMPLZ_TELEGRAM_BOT_TOKEN:-}",
+              "DMPLZ_TELEGRAM_CHAT_ID": "${DMPLZ_TELEGRAM_CHAT_ID:-}",
+              "DMPLZ_DISCORD_BOT_TOKEN": "${DMPLZ_DISCORD_BOT_TOKEN:-}",
+              "DMPLZ_DISCORD_CHANNEL_ID": "${DMPLZ_DISCORD_CHANNEL_ID:-}",
+              "DMPLZ_DISCORD_DM_USER_ID": "${DMPLZ_DISCORD_DM_USER_ID:-}",
+              "DMPLZ_PERMISSION_CHAT_ID": "${DMPLZ_PERMISSION_CHAT_ID:-}",
+              "DMPLZ_QUESTION_TIMEOUT_MS": "${DMPLZ_QUESTION_TIMEOUT_MS:-180000}"
+            }
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun run ${CLAUDE_PLUGIN_ROOT}/server/src/permission-hook.ts",
+            "timeout": 300000,
+            "env": {
+              "DMPLZ_PROVIDER": "${DMPLZ_PROVIDER:-telegram}",
+              "DMPLZ_TELEGRAM_BOT_TOKEN": "${DMPLZ_TELEGRAM_BOT_TOKEN:-}",
+              "DMPLZ_TELEGRAM_CHAT_ID": "${DMPLZ_TELEGRAM_CHAT_ID:-}",
+              "DMPLZ_DISCORD_BOT_TOKEN": "${DMPLZ_DISCORD_BOT_TOKEN:-}",
+              "DMPLZ_DISCORD_CHANNEL_ID": "${DMPLZ_DISCORD_CHANNEL_ID:-}",
+              "DMPLZ_DISCORD_DM_USER_ID": "${DMPLZ_DISCORD_DM_USER_ID:-}",
+              "DMPLZ_PERMISSION_CHAT_ID": "${DMPLZ_PERMISSION_CHAT_ID:-}",
+              "DMPLZ_QUESTION_TIMEOUT_MS": "${DMPLZ_QUESTION_TIMEOUT_MS:-180000}"
+            }
           }
         ]
       }
