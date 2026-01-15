@@ -11,6 +11,8 @@
 - **다중 플랫폼** - Telegram과 Discord 중 선택
 - **간단한 알림** - 전화 없이 업데이트 받기
 - **질문하기** - Claude가 질문하고 답변을 기다릴 수 있음
+- **권한 요청 거부 사유 입력** - 권한 요청을 거부할 때 사유를 입력할 수 있으며, 입력한 사유는 "다음 지시"로 간주되어 Claude가 작업을 조정해 다시 진행합니다
+
 - **간단한 설정** - 봇 토큰과 채널/채팅 ID만 필요
 - **무료** - Telegram과 Discord 봇 API 모두 완전 무료
 - **비동기 친화적** - 실시간 압박 없이 자신의 페이스대로 답변
@@ -124,6 +126,8 @@ Claude Code를 재시작하면 완료!
 | `DMPLZ_DISCORD_DM_USER_ID` | 아니오 (Discord) | 권한 요청을 DM으로 보낼 사용자 ID |
 | `DMPLZ_PERMISSION_CHAT_ID` | 아니오 | 권한 요청을 보낼 별도 채팅/채널 ID |
 | `DMPLZ_QUESTION_TIMEOUT_MS` | 아니오 (기본값: `10800000`) | 응답 대기 시간 제한 (3시간) |
+| `DMPLZ_REJECT_REASON_TIMEOUT_MS` | 아니오 (기본값: `600000`) | 거부 사유 입력 대기 시간 제한 (10분) |
+
 
 권한 요청은 `DMPLZ_PERMISSION_CHAT_ID`가 있으면 그 값을 우선 사용하고, 없으면 `DMPLZ_DISCORD_DM_USER_ID`(Discord 전용), 그것도 없으면 기본 채널/채팅으로 전송됩니다.
 

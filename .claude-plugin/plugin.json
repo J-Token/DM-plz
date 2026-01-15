@@ -1,6 +1,6 @@
 {
   "name": "dm-plz",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Claude sends you Telegram or Discord messages when it needs your input or wants to report progress",
   "author": {
     "name": "DM-Plz Contributors",
@@ -26,7 +26,13 @@
               "DMPLZ_DISCORD_CHANNEL_ID": "${DMPLZ_DISCORD_CHANNEL_ID:-}",
               "DMPLZ_DISCORD_DM_USER_ID": "${DMPLZ_DISCORD_DM_USER_ID:-}",
               "DMPLZ_PERMISSION_CHAT_ID": "${DMPLZ_PERMISSION_CHAT_ID:-}",
-              "DMPLZ_QUESTION_TIMEOUT_MS": "${DMPLZ_QUESTION_TIMEOUT_MS:-180000}"
+              "DMPLZ_QUESTION_TIMEOUT_MS": "${DMPLZ_QUESTION_TIMEOUT_MS:-180000}",
+              "DMPLZ_REJECT_REASON_TIMEOUT_MS": "${DMPLZ_REJECT_REASON_TIMEOUT_MS:-600000}",
+              "DMPLZ_REJECT_REASON_MAX_CHARS": "${DMPLZ_REJECT_REASON_MAX_CHARS:-300}",
+              "DMPLZ_REJECT_REASON_NO_REASON_KEYWORDS": "${DMPLZ_REJECT_REASON_NO_REASON_KEYWORDS:-no_reason}",
+              "DMPLZ_REJECT_REASON_LOG_PATH": "${DMPLZ_REJECT_REASON_LOG_PATH:-}",
+              "DMPLZ_REJECT_REASON_LOG_ROTATE_BYTES": "${DMPLZ_REJECT_REASON_LOG_ROTATE_BYTES:-}",
+              "DMPLZ_REJECT_REASON_LOG_MAX_FILES": "${DMPLZ_REJECT_REASON_LOG_MAX_FILES:-}"
             }
           }
         ]
@@ -48,7 +54,41 @@
               "DMPLZ_DISCORD_CHANNEL_ID": "${DMPLZ_DISCORD_CHANNEL_ID:-}",
               "DMPLZ_DISCORD_DM_USER_ID": "${DMPLZ_DISCORD_DM_USER_ID:-}",
               "DMPLZ_PERMISSION_CHAT_ID": "${DMPLZ_PERMISSION_CHAT_ID:-}",
-              "DMPLZ_QUESTION_TIMEOUT_MS": "${DMPLZ_QUESTION_TIMEOUT_MS:-180000}"
+              "DMPLZ_QUESTION_TIMEOUT_MS": "${DMPLZ_QUESTION_TIMEOUT_MS:-180000}",
+              "DMPLZ_REJECT_REASON_TIMEOUT_MS": "${DMPLZ_REJECT_REASON_TIMEOUT_MS:-600000}",
+              "DMPLZ_REJECT_REASON_MAX_CHARS": "${DMPLZ_REJECT_REASON_MAX_CHARS:-300}",
+              "DMPLZ_REJECT_REASON_NO_REASON_KEYWORDS": "${DMPLZ_REJECT_REASON_NO_REASON_KEYWORDS:-no_reason}",
+              "DMPLZ_REJECT_REASON_LOG_PATH": "${DMPLZ_REJECT_REASON_LOG_PATH:-}",
+              "DMPLZ_REJECT_REASON_LOG_ROTATE_BYTES": "${DMPLZ_REJECT_REASON_LOG_ROTATE_BYTES:-}",
+              "DMPLZ_REJECT_REASON_LOG_MAX_FILES": "${DMPLZ_REJECT_REASON_LOG_MAX_FILES:-}"
+            }
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun run ${CLAUDE_PLUGIN_ROOT}/server/src/stop-hook.ts",
+            "timeout": 300000,
+            "env": {
+              "DMPLZ_PROVIDER": "${DMPLZ_PROVIDER:-telegram}",
+              "DMPLZ_TELEGRAM_BOT_TOKEN": "${DMPLZ_TELEGRAM_BOT_TOKEN:-}",
+              "DMPLZ_TELEGRAM_CHAT_ID": "${DMPLZ_TELEGRAM_CHAT_ID:-}",
+              "DMPLZ_DISCORD_BOT_TOKEN": "${DMPLZ_DISCORD_BOT_TOKEN:-}",
+              "DMPLZ_DISCORD_CHANNEL_ID": "${DMPLZ_DISCORD_CHANNEL_ID:-}",
+              "DMPLZ_DISCORD_DM_USER_ID": "${DMPLZ_DISCORD_DM_USER_ID:-}",
+              "DMPLZ_PERMISSION_CHAT_ID": "${DMPLZ_PERMISSION_CHAT_ID:-}",
+              "DMPLZ_QUESTION_TIMEOUT_MS": "${DMPLZ_QUESTION_TIMEOUT_MS:-180000}",
+              "DMPLZ_REJECT_REASON_TIMEOUT_MS": "${DMPLZ_REJECT_REASON_TIMEOUT_MS:-600000}",
+              "DMPLZ_REJECT_REASON_MAX_CHARS": "${DMPLZ_REJECT_REASON_MAX_CHARS:-300}",
+              "DMPLZ_REJECT_REASON_NO_REASON_KEYWORDS": "${DMPLZ_REJECT_REASON_NO_REASON_KEYWORDS:-no_reason}",
+              "DMPLZ_REJECT_REASON_LOG_PATH": "${DMPLZ_REJECT_REASON_LOG_PATH:-}",
+              "DMPLZ_REJECT_REASON_LOG_ROTATE_BYTES": "${DMPLZ_REJECT_REASON_LOG_ROTATE_BYTES:-}",
+              "DMPLZ_REJECT_REASON_LOG_MAX_FILES": "${DMPLZ_REJECT_REASON_LOG_MAX_FILES:-}"
             }
           }
         ]

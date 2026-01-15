@@ -11,6 +11,8 @@ Inspired by [call-me](https://github.com/ZeframLou/call-me), DM-Plz lets Claude 
 - **Multiple platforms** - Choose between Telegram or Discord
 - **Simple notifications** - Get updates without phone calls
 - **Ask questions** - Claude can ask you questions and wait for your response
+- **Permission reject reason** - When you reject a permission request, you can optionally enter a reason; the reason is treated as the next instruction so Claude can adjust and retry
+
 - **No complex setup** - Just a bot token and channel/chat ID
 - **Free** - Both Telegram and Discord Bot APIs are completely free
 - **Async friendly** - Reply at your own pace, no real-time pressure
@@ -122,8 +124,10 @@ Restart Claude Code. Done!
 | `DMPLZ_DISCORD_BOT_TOKEN`   | Yes (for Discord)        | Bot token from Discord Developer Portal          |
 | `DMPLZ_DISCORD_CHANNEL_ID`  | Yes (for Discord)        | Channel ID (enable Developer Mode to copy)       |
 | `DMPLZ_DISCORD_DM_USER_ID`  | No (Discord)             | User ID for sending permission requests via DM   |
-| `DMPLZ_PERMISSION_CHAT_ID`  | No                       | Override chat/channel ID for permission requests |
-| `DMPLZ_QUESTION_TIMEOUT_MS` | No (default: `10800000`) | Timeout for waiting for responses (3 hours)      |
+| `DMPLZ_PERMISSION_CHAT_ID`         | No                       | Override chat/channel ID for permission requests |
+| `DMPLZ_QUESTION_TIMEOUT_MS`        | No (default: `10800000`) | Timeout for waiting for responses (3 hours)      |
+| `DMPLZ_REJECT_REASON_TIMEOUT_MS`   | No (default: `600000`)   | Timeout for entering a rejection reason (10 min) |
+
 
 Permission requests use `DMPLZ_PERMISSION_CHAT_ID` first if set, otherwise `DMPLZ_DISCORD_DM_USER_ID` (Discord only), and finally the default chat/channel.
 
