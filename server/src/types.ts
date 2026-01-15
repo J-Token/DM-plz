@@ -19,6 +19,30 @@ export interface ServerConfig {
    */
   questionTimeoutMs: number;
   /**
+   * 거부 사유 입력 대기 시간(밀리초)
+   */
+  rejectReasonTimeoutMs: number;
+  /**
+   * 거부 사유 최대 길이
+   */
+  rejectReasonMaxChars: number;
+  /**
+   * 거부 사유 로그 파일 경로
+   */
+  rejectReasonLogPath: string;
+  /**
+   * 거부 사유 로그 로테이션 기준 바이트
+   */
+  rejectReasonLogRotateBytes: number;
+  /**
+   * 거부 사유 로그 보관 파일 개수
+   */
+  rejectReasonLogMaxFiles: number;
+  /**
+   * 사유 없음 키워드 목록
+   */
+  rejectReasonNoReasonKeywords: string[];
+  /**
    * 권한 요청을 보낼 채팅/채널 ID (선택)
    */
   permissionChatId?: string;
@@ -29,9 +53,30 @@ export interface ServerConfig {
 }
 
 /**
+ * 거부 사유 출처 타입
+ */
+export type RejectReasonSource = 'user_input' | 'explicit_skip' | 'timeout';
+
+/**
+ * 거부 응답 타입
+ */
+export interface RejectPermissionResponse {
+  type: 'reject';
+  reason: string;
+  reasonSource: RejectReasonSource;
+}
+
+/**
  * 권한 요청 응답 타입
  */
-export type PermissionResponse = 'approve' | 'approve_session' | 'reject';
+export type PermissionResponse = 'approve' | 'approve_session' | RejectPermissionResponse;
+
+/**
+ * 권한 요청 컨텍스트
+ */
+export interface PermissionRequestContext {
+  requestId: string;
+}
 
 /**
  * 프로바이더 인터페이스 - 모든 메시징 프로바이더가 구현해야 함
@@ -50,7 +95,11 @@ export interface MessagingProvider {
   /**
    * 사용자 승인 요청 (승인/거부/세션허용)
    */
-  requestPermission(message: string, timeoutMs: number): Promise<PermissionResponse>;
+  requestPermission(
+    message: string,
+    timeoutMs: number,
+    context?: PermissionRequestContext
+  ): Promise<PermissionResponse>;
 
   /**
    * 프로바이더 정보 조회

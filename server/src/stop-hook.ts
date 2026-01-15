@@ -10,6 +10,8 @@ import { TelegramProvider } from './providers/telegram.js';
 import { DiscordProvider } from './providers/discord.js';
 import type { ServerConfig, MessagingProvider } from './types.js';
 import { readFileSync, existsSync } from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 interface StopHookInput {
   session_id: string;
@@ -37,11 +39,32 @@ interface TranscriptEntry {
 
 /**
  * Exit code 2 + stderr JSON 방식의 Stop hook 출력
- * 
+ *
  * Claude Code는 exit code 2를 받으면 stderr의 JSON을 파싱하여
  * reason 필드를 새로운 사용자 메시지로 처리합니다.
- * 
- * @see https://github.com/anthropics/claude-code/issues/10412
+ *
+ * ⚠️ 알려진 버그 (2025년 1월 기준):
+ * Plugin으로 설치된 Stop hook은 exit code 2가 제대로 작동하지 않습니다.
+ * - GitHub Issue #10412: https://github.com/anthropics/claude-code/issues/10412
+ * - GitHub Issue #10875: https://github.com/anthropics/claude-code/issues/10875
+ *
+ * Workaround:
+ * 1. ~/.claude/hooks/에 직접 설치하거나
+ * 2. ~/.claude/settings.json에 inline hook으로 정의
+ *
+ * 예시 (settings.json):
+ * {
+ *   "hooks": {
+ *     "Stop": [{
+ *       "matcher": "*",
+ *       "hooks": [{
+ *         "type": "command",
+ *         "command": "bun run /path/to/stop-hook.ts",
+ *         "timeout": 300000
+ *       }]
+ *     }]
+ *   }
+ * }
  */
 interface StopHookOutput {
   continue: boolean;
@@ -52,11 +75,63 @@ interface StopHookOutput {
 }
 
 /**
+ * 키워드 목록 환경 변수를 파싱합니다.
+ */
+function parseKeywordList(rawValue: string | undefined, fallback: string[]): string[] {
+  if (!rawValue) {
+    return fallback;
+  }
+
+  const keywords = rawValue
+    .split(',')
+    .map((keyword) => keyword.trim())
+    .filter((keyword) => keyword.length > 0);
+
+  return keywords.length > 0 ? keywords : fallback;
+}
+
+/**
+ * 숫자형 환경 변수를 파싱합니다.
+ */
+function parseNumberEnv(rawValue: string | undefined, fallback: number): number {
+  const parsed = parseInt(rawValue || '', 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+/**
+ * 거부 사유 로그 경로를 정규화합니다.
+ */
+function resolveRejectLogPath(rawPath: string | undefined): string {
+  const defaultPath = path.join(os.homedir(), '.claude', 'dm-plz', 'rejections.jsonl');
+  const resolvedPath = rawPath && rawPath.length > 0 ? rawPath : defaultPath;
+
+  if (resolvedPath.startsWith('~')) {
+    const trimmedPath = resolvedPath.slice(1).replace(/^[/\\]/, '');
+    return path.join(os.homedir(), trimmedPath);
+  }
+
+  return resolvedPath;
+}
+
+/**
  * 환경 변수에서 설정을 로드합니다.
  */
 function loadConfig(): ServerConfig {
-  const provider = (process.env.DMPLZ_PROVIDER || 'telegram') as 'telegram' | 'discord';
-  const questionTimeoutMs = parseInt(process.env.DMPLZ_QUESTION_TIMEOUT_MS || '180000', 10);
+  const rawProvider = process.env.DMPLZ_PROVIDER;
+  const provider: 'telegram' | 'discord' = rawProvider === 'discord' ? 'discord' : 'telegram';
+  const questionTimeoutMs = parseNumberEnv(process.env.DMPLZ_QUESTION_TIMEOUT_MS, 180000);
+  const rejectReasonTimeoutMs = parseNumberEnv(process.env.DMPLZ_REJECT_REASON_TIMEOUT_MS, 60000);
+  const rejectReasonMaxChars = parseNumberEnv(process.env.DMPLZ_REJECT_REASON_MAX_CHARS, 300);
+  const rejectReasonLogPath = resolveRejectLogPath(process.env.DMPLZ_REJECT_REASON_LOG_PATH);
+  const rejectReasonLogRotateBytes = parseNumberEnv(
+    process.env.DMPLZ_REJECT_REASON_LOG_ROTATE_BYTES,
+    10485760
+  );
+  const rejectReasonLogMaxFiles = parseNumberEnv(process.env.DMPLZ_REJECT_REASON_LOG_MAX_FILES, 10);
+  const rejectReasonNoReasonKeywords = parseKeywordList(
+    process.env.DMPLZ_REJECT_REASON_NO_REASON_KEYWORDS,
+    ['no_reason']
+  );
 
   if (provider === 'telegram') {
     const botToken = process.env.DMPLZ_TELEGRAM_BOT_TOKEN;
@@ -71,6 +146,12 @@ function loadConfig(): ServerConfig {
       botToken,
       chatId,
       questionTimeoutMs,
+      rejectReasonTimeoutMs,
+      rejectReasonMaxChars,
+      rejectReasonLogPath,
+      rejectReasonLogRotateBytes,
+      rejectReasonLogMaxFiles,
+      rejectReasonNoReasonKeywords,
       permissionChatId: process.env.DMPLZ_PERMISSION_CHAT_ID,
     };
   } else {
@@ -86,6 +167,12 @@ function loadConfig(): ServerConfig {
       botToken,
       chatId,
       questionTimeoutMs,
+      rejectReasonTimeoutMs,
+      rejectReasonMaxChars,
+      rejectReasonLogPath,
+      rejectReasonLogRotateBytes,
+      rejectReasonLogMaxFiles,
+      rejectReasonNoReasonKeywords,
       permissionChatId: process.env.DMPLZ_PERMISSION_CHAT_ID,
       discordDmUserId: process.env.DMPLZ_DISCORD_DM_USER_ID,
     };
@@ -119,6 +206,85 @@ async function readStdin(): Promise<StopHookInput | null> {
   } catch (e) {
     // 파싱 실패 시 null 반환
   }
+  return null;
+}
+
+interface RejectLogEntry {
+  timestamp: string;
+  decision: 'deny' | string;
+  tool_name?: string;
+  cwd?: string;
+  reason?: string;
+}
+
+/**
+ * 거부 로그(JSONL) 한 줄을 파싱합니다.
+ */
+function parseRejectLogLine(line: string): RejectLogEntry | null {
+  try {
+    return JSON.parse(line) as RejectLogEntry;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 사용자에게 표시할 거부 사유 문자열을 정리합니다.
+ */
+function formatRejectReason(reason: string | undefined): string {
+  const trimmed = (reason || '').trim();
+  return trimmed.length > 0 ? trimmed : '이유없음';
+}
+
+/**
+ * 최근에 발생한 거부(deny) 로그가 있으면 반환합니다.
+ */
+function findRecentRejection(options: {
+  logPath: string;
+  cwd?: string;
+  withinMs: number;
+}): RejectLogEntry | null {
+  try {
+    if (!existsSync(options.logPath)) {
+      return null;
+    }
+
+    const content = readFileSync(options.logPath, 'utf-8');
+    const lines = content.split('\n').filter((line) => line.trim().length > 0);
+
+    const now = Date.now();
+    const cutoff = now - options.withinMs;
+
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      const entry = parseRejectLogLine(lines[index]);
+      if (!entry) {
+        continue;
+      }
+
+      if (entry.decision !== 'deny') {
+        continue;
+      }
+
+      const timestampMs = Date.parse(entry.timestamp);
+      if (!Number.isFinite(timestampMs)) {
+        continue;
+      }
+
+      if (timestampMs < cutoff) {
+        // 최신부터 역순 탐색 중이므로, 이보다 더 오래된 로그는 볼 필요가 없습니다.
+        break;
+      }
+
+      if (options.cwd && entry.cwd && entry.cwd !== options.cwd) {
+        continue;
+      }
+
+      return entry;
+    }
+  } catch {
+    // 로그 파싱 실패 시 무시
+  }
+
   return null;
 }
 
@@ -199,9 +365,17 @@ function extractRecentWork(transcriptPath: string, maxLines: number = 50): strin
 /**
  * 알림 메시지를 생성합니다.
  */
-function buildNotificationMessage(input: StopHookInput | null): string {
-  let message = '🏁 *작업이 완료되었습니다.*\n\n';
-  
+function buildNotificationMessage(input: StopHookInput | null, recentRejection: RejectLogEntry | null): string {
+  let message = recentRejection
+    ? '⛔ *권한 거부로 작업이 중단되었습니다.*\n\n'
+    : '🏁 *작업이 완료되었습니다.*\n\n';
+
+  if (recentRejection) {
+    const toolName = recentRejection.tool_name || 'unknown';
+    const reason = formatRejectReason(recentRejection.reason);
+    message += `*도구:* \`${toolName}\`\n*사유:* ${reason}\n\n`;
+  }
+
   // Transcript에서 작업 내용 추출
   if (input?.transcript_path) {
     const workSummary = extractRecentWork(input.transcript_path);
@@ -209,12 +383,35 @@ function buildNotificationMessage(input: StopHookInput | null): string {
       message += `📋 *작업 요약:*\n${workSummary}\n\n`;
     }
   }
-  
+
   message += '💬 다음 지시를 입력하면 계속 진행합니다:';
-  
+
   return message;
 }
 
+/**
+ * 거부 사유를 포함해 continuation 메시지를 구성합니다.
+ */
+function buildContinuationReason(reply: string, recentRejection: RejectLogEntry | null): string {
+  const trimmedReply = reply.trim();
+
+  if (!recentRejection) {
+    return trimmedReply.length > 0 ? trimmedReply : reply;
+  }
+
+  const toolName = recentRejection.tool_name || 'unknown';
+  const reason = formatRejectReason(recentRejection.reason);
+
+  if (trimmedReply.length === 0) {
+    return `권한 거부로 중단됨. 도구=${toolName}, 요청=${reason}`;
+  }
+
+  return `권한 거부로 중단됨. 도구=${toolName}, 요청=${reason}\n추가 지시: ${trimmedReply}`;
+}
+
+/**
+ * Stop 훅 처리 흐름을 실행합니다.
+ */
 async function main() {
   try {
     // stdin 입력 읽기 및 파싱
@@ -223,26 +420,32 @@ async function main() {
     // 설정 로드 및 프로바이더 준비
     const config = loadConfig();
     const provider = createProvider(config);
+
+    const recentRejection = findRecentRejection({
+      logPath: config.rejectReasonLogPath,
+      cwd: input?.cwd,
+      withinMs: 2 * 60 * 1000,
+    });
     
     // 봇 정보 초기화
     await provider.getInfo();
 
     // 알림 메시지 생성 및 전송
-    const message = buildNotificationMessage(input);
+    const message = buildNotificationMessage(input, recentRejection);
     await provider.sendMessage(message, 'Markdown');
 
     // 사용자 응답 대기
     const reply = await provider.waitForReply(config.questionTimeoutMs);
 
     // 응답이 있으면 exit code 2 + stderr JSON으로 continuation 요청
-    // @see https://github.com/anthropics/claude-code/issues/10412
     if (reply) {
+      const continuationReason = buildContinuationReason(reply, recentRejection);
       const output: StopHookOutput = {
         continue: true,
         stopReason: '',
         suppressOutput: false,
         decision: 'block',
-        reason: reply,
+        reason: continuationReason,
       };
       // stderr로 JSON 출력 (Claude Code가 이를 파싱)
       console.error(JSON.stringify(output));

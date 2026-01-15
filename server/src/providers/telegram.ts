@@ -11,8 +11,15 @@ import type {
   TelegramMessage,
   TelegramUpdate,
   TelegramCallbackQuery,
+  PermissionRequestContext,
   PermissionResponse,
+  RejectReasonSource,
 } from '../types.js';
+
+interface RejectReasonResult {
+  reason: string;
+  reasonSource: RejectReasonSource;
+}
 
 export class TelegramProvider implements MessagingProvider {
   private baseUrl: string;
@@ -58,9 +65,91 @@ export class TelegramProvider implements MessagingProvider {
   }
 
   /**
+   * 거부 사유 입력 안내 메시지를 생성합니다.
+   */
+  private buildRejectReasonPrompt(timeoutMs: number): string {
+    const timeoutMinutes = Math.max(Math.ceil(timeoutMs / 60000), 1);
+
+    return [
+      '❌ 거부를 선택하셨습니다.',
+      '*거부 사유를 입력해주세요 (선택).*',
+      '입력한 사유는 Claude에게 "다음 지시"로 전달되어 작업이 다시 진행됩니다.',
+      '예: `1.0.5로 해줘`',
+      '사유 없이 거부하려면 아래 버튼을 누르세요.',
+      `시간 제한: ${timeoutMinutes}분`,
+    ].join('\n');
+  }
+
+  /**
+   * 거부 사유 입력을 받을 채팅 ID를 결정합니다.
+   */
+  private resolveRejectReasonChatId(permissionChatId: string): string {
+    if (permissionChatId !== this.config.chatId) {
+      return this.config.chatId;
+    }
+
+    return permissionChatId;
+  }
+
+  /**
+   * 거부 사유 입력 요청 메시지를 전송합니다.
+   */
+  private async sendRejectReasonPrompt(chatId: string, timeoutMs: number): Promise<number | null> {
+    const params = {
+      chat_id: chatId,
+      text: this.buildRejectReasonPrompt(timeoutMs),
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [[{ text: '사유 없이 거부', callback_data: 'reject_no_reason' }]],
+      },
+    };
+
+    const response = await fetch(`${this.baseUrl}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = (await response.json()) as TelegramResponse<TelegramMessage>;
+    if (!data.ok) {
+      return null;
+    }
+
+    return data.result?.message_id ?? null;
+  }
+
+  /**
+   * 만료 안내 메시지를 생성합니다.
+   */
+  private buildExpiredNotice(requestId?: string): string {
+    const suffix = requestId ? ` (request_id: ${requestId})` : '';
+    return `이 권한 요청은 이미 만료되었습니다.${suffix}`;
+  }
+
+  /**
+   * 거부 사유 입력 결과 메시지를 생성합니다.
+   */
+  private buildRejectReasonResultNotice(result: RejectReasonResult): string {
+    if (result.reasonSource === 'user_input') {
+      return '거부 사유가 입력되었습니다.';
+    }
+
+    if (result.reasonSource === 'timeout') {
+      return '거부 사유 입력 시간이 만료되어 사유 없이 거부합니다.';
+    }
+
+    return '사유 없이 거부가 확정되었습니다.';
+  }
+
+  /**
    * 봇 멘션 여부를 확인합니다.
    */
   private isBotMentioned(message: TelegramMessage): boolean {
+
     // @username으로 봇을 멘션했는지 확인
     if (message.entities) {
       const hasMention = message.entities.some(
@@ -130,16 +219,28 @@ export class TelegramProvider implements MessagingProvider {
   /**
    * 승인/세션허용/거부 버튼으로 권한을 요청합니다.
    */
-  async requestPermission(message: string, timeoutMs: number): Promise<PermissionResponse> {
+  async requestPermission(
+    message: string,
+    timeoutMs: number,
+    context?: PermissionRequestContext
+  ): Promise<PermissionResponse> {
+    // 이전 업데이트가 남아 있으면 잘못된 버튼 응답을 처리할 수 있으므로 먼저 비웁니다.
+    await this.flushPendingUpdates();
+
     const startTime = Date.now();
     const pollTimeout = 10; // 10초마다 폴링
     const currentUpdateId = this.lastUpdateId;
     const permissionChatId = this.config.permissionChatId || this.config.chatId;
+    const reasonChatId = this.resolveRejectReasonChatId(permissionChatId);
+    const rejectReasonTimeoutMs = this.config.rejectReasonTimeoutMs;
+
+
 
     // 인라인 키보드로 승인/세션허용/거부 버튼 전송
     const params = {
       chat_id: permissionChatId,
       text: message,
+      parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
           [
@@ -165,6 +266,7 @@ export class TelegramProvider implements MessagingProvider {
 
     // 방금 보낸 메시지의 ID 저장 (이 메시지에 대한 응답만 처리하기 위해)
     const sentMessageId = data.result.message_id;
+    const originalMessage = message;
 
     // 콜백 쿼리 응답 대기
     while (Date.now() - startTime < timeoutMs) {
@@ -187,20 +289,97 @@ export class TelegramProvider implements MessagingProvider {
             continue;
           }
 
-          // 로딩 상태 제거를 위해 콜백 쿼리 응답
-          await this.answerCallbackQuery(query.id);
-
-          // 콜백 데이터 확인
-          if (query.data === 'approve' || query.data === 'approve_session' || query.data === 'reject') {
-            return query.data as PermissionResponse;
+          // 승인 처리
+          if (query.data === 'approve') {
+            await this.answerCallbackQuery(query.id, '✅ 승인되었습니다');
+            // 메시지 수정: 승인 상태 표시
+            await this.editMessageText(
+              permissionChatId,
+              sentMessageId,
+              `${originalMessage}\n\n✅ *승인됨*`,
+              { inline_keyboard: [] }
+            );
+            return 'approve';
           }
+
+          // 세션 허용 처리
+          if (query.data === 'approve_session') {
+            await this.answerCallbackQuery(query.id, '🔄 세션 내 허용되었습니다');
+            // 메시지 수정: 세션 허용 상태 표시
+            await this.editMessageText(
+              permissionChatId,
+              sentMessageId,
+              `${originalMessage}\n\n🔄 *세션 내 허용됨*`,
+              { inline_keyboard: [] }
+            );
+            return 'approve_session';
+          }
+
+          // 거부 처리: 이유 입력 요청
+          if (query.data === 'reject') {
+            const rejectNotice =
+              reasonChatId !== permissionChatId
+                ? '❌ 거부 사유를 DM으로 입력해주세요'
+                : '❌ 거부 사유를 입력해주세요';
+            await this.answerCallbackQuery(query.id, rejectNotice);
+
+            const remainingMs = Math.max(timeoutMs - (Date.now() - startTime), 0);
+            const waitTimeoutMs = Math.min(rejectReasonTimeoutMs, remainingMs);
+            let reasonPromptChatId = reasonChatId;
+            let reasonPromptMessageId = await this.sendRejectReasonPrompt(reasonPromptChatId, waitTimeoutMs);
+
+            if (reasonPromptMessageId === null && reasonChatId !== permissionChatId) {
+              reasonPromptChatId = permissionChatId;
+              reasonPromptMessageId = await this.sendRejectReasonPrompt(reasonPromptChatId, waitTimeoutMs);
+            }
+
+            if (reasonPromptMessageId === null) {
+              await this.editMessageText(
+                permissionChatId,
+                sentMessageId,
+                `${originalMessage}\n\n❌ *거부됨*\n사유: 이유없음`,
+                { inline_keyboard: [] }
+              );
+              return { type: 'reject', reason: '', reasonSource: 'explicit_skip' };
+            }
+
+            const reasonResult = waitTimeoutMs > 0
+              ? await this.waitForRejectReason(reasonPromptMessageId, waitTimeoutMs, reasonPromptChatId)
+              : ({ reason: '', reasonSource: 'timeout' } as RejectReasonResult);
+
+            const trimmedReason = (reasonResult.reason || '').trim();
+            const reasonSummary = `사유: ${trimmedReason.length > 0 ? trimmedReason : '이유없음'}`;
+
+            await this.editMessageText(
+              permissionChatId,
+              sentMessageId,
+              `${originalMessage}\n\n❌ *거부됨*\n${reasonSummary}`,
+              { inline_keyboard: [] }
+            );
+
+            await this.editMessageText(
+              reasonPromptChatId,
+              reasonPromptMessageId,
+              this.buildRejectReasonResultNotice(reasonResult),
+              { inline_keyboard: [] }
+            );
+
+            return {
+              type: 'reject',
+              reason: reasonResult.reason,
+              reasonSource: reasonResult.reasonSource,
+            };
+          }
+
         }
       }
 
       // 타임아웃 확인
       if (Date.now() - startTime >= timeoutMs) {
+        await this.markRequestExpired(permissionChatId, sentMessageId, originalMessage, context?.requestId);
         throw new Error('Timeout waiting for permission response');
       }
+
     }
 
     throw new Error('Timeout waiting for permission response');
@@ -209,13 +388,117 @@ export class TelegramProvider implements MessagingProvider {
   /**
    * 콜백 쿼리 응답을 전송합니다.
    */
-  private async answerCallbackQuery(callbackQueryId: string): Promise<void> {
+  private async answerCallbackQuery(callbackQueryId: string, text?: string): Promise<void> {
     await fetch(`${this.baseUrl}/answerCallbackQuery`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ callback_query_id: callbackQueryId }),
+      body: JSON.stringify({
+        callback_query_id: callbackQueryId,
+        text: text,
+      }),
     });
   }
+
+  /**
+   * 만료 상태로 메시지를 갱신합니다.
+   */
+  private async markRequestExpired(
+    chatId: string,
+    messageId: number,
+    originalMessage: string,
+    requestId?: string
+  ): Promise<void> {
+    const expiredText = `${originalMessage}\n\n⏱️ *만료됨*\n${this.buildExpiredNotice(requestId)}`;
+    await this.editMessageText(chatId, messageId, expiredText, { inline_keyboard: [] });
+  }
+
+  /**
+   * 메시지를 수정합니다.
+   */
+  private async editMessageText(
+    chatId: string,
+    messageId: number,
+    text: string,
+    replyMarkup?: Record<string, unknown>
+  ): Promise<void> {
+
+    const response = await fetch(`${this.baseUrl}/editMessageText`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+        text: text,
+        parse_mode: 'Markdown',
+        reply_markup: replyMarkup,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error(`Failed to edit message: ${error}`);
+    }
+  }
+
+
+  /**
+   * 거부 사유 입력 또는 생략을 대기합니다.
+   */
+  private async waitForRejectReason(
+    afterMessageId: number,
+    timeoutMs: number,
+    chatId: string
+  ): Promise<RejectReasonResult> {
+    const startTime = Date.now();
+    const pollTimeout = 10;
+    const currentUpdateId = this.lastUpdateId;
+
+    while (Date.now() - startTime < timeoutMs) {
+      const updates = await this.getUpdates(currentUpdateId + 1, pollTimeout);
+
+      for (const update of updates) {
+        if (update.callback_query) {
+          const query = update.callback_query;
+          const queryChatId = query.message?.chat.id?.toString();
+          const queryMessageId = query.message?.message_id;
+
+          if (queryChatId !== chatId) {
+            continue;
+          }
+
+          if (queryMessageId !== afterMessageId) {
+            continue;
+          }
+
+          if (query.data === 'reject_no_reason') {
+            await this.answerCallbackQuery(query.id, '사유 없이 거부 처리되었습니다');
+            return { reason: '', reasonSource: 'explicit_skip' };
+          }
+        }
+
+        if (update.message && update.message.chat.id.toString() === chatId) {
+          const message = update.message;
+
+          if (message.message_id <= afterMessageId) {
+            continue;
+          }
+
+          if (message.chat.type !== 'private' && !this.isBotMentioned(message)) {
+            continue;
+          }
+
+          return { reason: message.text || '', reasonSource: 'user_input' };
+        }
+      }
+
+      if (Date.now() - startTime >= timeoutMs) {
+        return { reason: '', reasonSource: 'timeout' };
+      }
+    }
+
+    return { reason: '', reasonSource: 'timeout' };
+  }
+
 
   /**
    * 봇 정보를 조회합니다.
