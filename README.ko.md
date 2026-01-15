@@ -106,7 +106,7 @@
 또는 GitHub에 게시된 경우:
 
 ```bash
-/plugin marketplace add yourusername/dm-plz
+/plugin marketplace add https://github.com/j-token/dm-plz-claude.git
 /plugin install dm-plz@dm-plz
 ```
 
@@ -116,18 +116,17 @@ Claude Code를 재시작하면 완료!
 
 ## 설정 변수
 
-| 변수 | 필수 여부 | 설명 |
-|----------|----------|-------------|
-| `DMPLZ_PROVIDER` | 아니오 (기본값: `telegram`) | 사용할 플랫폼: `telegram` 또는 `discord` |
-| `DMPLZ_TELEGRAM_BOT_TOKEN` | 예 (Telegram 사용시) | @BotFather에서 받은 봇 토큰 |
-| `DMPLZ_TELEGRAM_CHAT_ID` | 예 (Telegram 사용시) | @userinfobot에서 받은 개인 채팅 ID |
-| `DMPLZ_DISCORD_BOT_TOKEN` | 예 (Discord 사용시) | Discord Developer Portal에서 받은 봇 토큰 |
-| `DMPLZ_DISCORD_CHANNEL_ID` | 예 (Discord 사용시) | 채널 ID (개발자 모드에서 복사) |
-| `DMPLZ_DISCORD_DM_USER_ID` | 아니오 (Discord) | 권한 요청을 DM으로 보낼 사용자 ID |
-| `DMPLZ_PERMISSION_CHAT_ID` | 아니오 | 권한 요청을 보낼 별도 채팅/채널 ID |
-| `DMPLZ_QUESTION_TIMEOUT_MS` | 아니오 (기본값: `10800000`) | 응답 대기 시간 제한 (3시간) |
-| `DMPLZ_REJECT_REASON_TIMEOUT_MS` | 아니오 (기본값: `600000`) | 거부 사유 입력 대기 시간 제한 (10분) |
-
+| 변수                             | 필수 여부                   | 설명                                      |
+| -------------------------------- | --------------------------- | ----------------------------------------- |
+| `DMPLZ_PROVIDER`                 | 아니오 (기본값: `telegram`) | 사용할 플랫폼: `telegram` 또는 `discord`  |
+| `DMPLZ_TELEGRAM_BOT_TOKEN`       | 예 (Telegram 사용시)        | @BotFather에서 받은 봇 토큰               |
+| `DMPLZ_TELEGRAM_CHAT_ID`         | 예 (Telegram 사용시)        | @userinfobot에서 받은 개인 채팅 ID        |
+| `DMPLZ_DISCORD_BOT_TOKEN`        | 예 (Discord 사용시)         | Discord Developer Portal에서 받은 봇 토큰 |
+| `DMPLZ_DISCORD_CHANNEL_ID`       | 예 (Discord 사용시)         | 채널 ID (개발자 모드에서 복사)            |
+| `DMPLZ_DISCORD_DM_USER_ID`       | 아니오 (Discord)            | 권한 요청을 DM으로 보낼 사용자 ID         |
+| `DMPLZ_PERMISSION_CHAT_ID`       | 아니오                      | 권한 요청을 보낼 별도 채팅/채널 ID        |
+| `DMPLZ_QUESTION_TIMEOUT_MS`      | 아니오 (기본값: `10800000`) | 응답 대기 시간 제한 (3시간)               |
+| `DMPLZ_REJECT_REASON_TIMEOUT_MS` | 아니오 (기본값: `600000`)   | 거부 사유 입력 대기 시간 제한 (10분)      |
 
 권한 요청은 `DMPLZ_PERMISSION_CHAT_ID`가 있으면 그 값을 우선 사용하고, 없으면 `DMPLZ_DISCORD_DM_USER_ID`(Discord 전용), 그것도 없으면 기본 채널/채팅으로 전송됩니다.
 
@@ -157,34 +156,39 @@ MCP 서버는 로컬에서 실행되며 폴링 방식으로 봇 API를 사용합
 ## 도구
 
 ### `send_message`
+
 간단한 알림 메시지를 전송합니다.
 
 ```typescript
 await send_message({
   message: "빌드가 성공적으로 완료되었습니다! ✅",
-  parse_mode: "Markdown" // 선택사항
+  parse_mode: "Markdown", // 선택사항
 });
 ```
 
 ### `ask_question`
+
 질문을 보내고 사용자의 답변을 기다립니다.
 
 ```typescript
 const response = await ask_question({
-  question: "3개의 버그를 발견했습니다. 지금 수정할까요 아니면 이슈를 생성할까요?",
-  parse_mode: "Markdown" // 선택사항
+  question:
+    "3개의 버그를 발견했습니다. 지금 수정할까요 아니면 이슈를 생성할까요?",
+  parse_mode: "Markdown", // 선택사항
 });
 // 사용자의 응답이 텍스트로 반환됩니다
 ```
 
 ### `send_notification`
+
 제목과 상세 메시지가 있는 알림을 전송합니다.
 
 ```typescript
 await send_notification({
   title: "배포 완료",
-  message: "프로덕션에 성공적으로 배포되었습니다\n• 15개 파일 변경\n• 0개 에러\n• 2개 경고",
-  parse_mode: "Markdown" // 선택사항
+  message:
+    "프로덕션에 성공적으로 배포되었습니다\n• 15개 파일 변경\n• 0개 에러\n• 2개 경고",
+  parse_mode: "Markdown", // 선택사항
 });
 ```
 
@@ -193,6 +197,7 @@ await send_notification({
 ## 사용 예시
 
 ### 작업 완료 알림
+
 ```
 Claude: *인증 시스템 구현 완료*
 Claude: send_message("인증 시스템을 구현했습니다! JWT 토큰, 로그인/로그아웃, 비밀번호 해싱을 추가했습니다.")
@@ -200,6 +205,7 @@ Claude: send_message("인증 시스템을 구현했습니다! JWT 토큰, 로그
 ```
 
 ### 대화형 의사결정
+
 ```
 Claude: *문제를 해결하는 여러 방법 발견*
 Claude: ask_question("캐싱을 Redis나 in-memory로 구현할 수 있습니다. 어떤 것을 선호하시나요?")
@@ -208,6 +214,7 @@ Claude: *사용자의 선택에 따라 계속 진행*
 ```
 
 ### 진행 상황 업데이트
+
 ```
 Claude: *테스트 실행 중*
 Claude: send_notification(title: "테스트 실행 중", message: "250개의 테스트를 실행 중입니다... 몇 분 정도 걸릴 수 있습니다")
@@ -287,12 +294,14 @@ bun run install-stop-hook
 Markdown과 HTML 포맷팅 모두 지원됩니다:
 
 ### Markdown (권장)
+
 ```
 **굵게** *기울임* `코드`
 [링크](https://example.com)
 ```
 
 ### HTML
+
 ```
 <b>굵게</b> <i>기울임</i> <code>코드</code>
 <a href="https://example.com">링크</a>
@@ -310,31 +319,34 @@ Markdown과 HTML 포맷팅 모두 지원됩니다:
 
 ## 비교
 
-| 기능 | Telegram | Discord |
-|---------|----------|---------|
-| 설정 복잡도 | 매우 낮음 | 낮음 |
-| 개인 DM | 예 | 예 (채널 통해) |
-| Markdown 지원 | 예 | 예 (기본) |
-| 속도 제한 | 매우 관대함 | 보통 |
-| 폴링 속도 | 10초 간격 | 2초 간격 |
-| 적합한 용도 | 개인 알림 | 팀/서버 알림 |
+| 기능          | Telegram    | Discord        |
+| ------------- | ----------- | -------------- |
+| 설정 복잡도   | 매우 낮음   | 낮음           |
+| 개인 DM       | 예          | 예 (채널 통해) |
+| Markdown 지원 | 예          | 예 (기본)      |
+| 속도 제한     | 매우 관대함 | 보통           |
+| 폴링 속도     | 10초 간격   | 2초 간격       |
+| 적합한 용도   | 개인 알림   | 팀/서버 알림   |
 
 ---
 
 ## 문제 해결
 
 ### Claude가 도구를 사용하지 않음
+
 1. `~/.claude/settings.json`에 모든 환경 변수가 설정되어 있는지 확인
 2. 플러그인 설치 후 Claude Code 재시작
 3. 명시적으로 시도: "작업이 끝나면 메시지 보내줘."
 
 ### Telegram: 메시지가 수신되지 않음
+
 1. 봇 토큰이 올바른지 확인
 2. 봇과 채팅을 시작했는지 확인 (`/start` 전송)
 3. 채팅 ID가 개인 채팅 ID인지 확인 (그룹이 아님)
 4. `claude --debug`로 MCP 서버 로그 확인
 
 ### Discord: 메시지가 수신되지 않음
+
 1. 봇 토큰과 채널 ID가 올바른지 확인
 2. 봇이 서버에 초대되었는지 확인
 3. 봇에 권한이 있는지 확인: Send Messages, Read Messages, Read Message History
@@ -342,10 +354,12 @@ Markdown과 HTML 포맷팅 모두 지원됩니다:
 5. `claude --debug`로 MCP 서버 로그 확인
 
 ### 질문 시간 초과
+
 1. 응답하는 데 더 많은 시간이 필요하면 `DMPLZ_QUESTION_TIMEOUT_MS` 증가
 2. 올바른 채팅/채널에서 답변하고 있는지 확인
 
 ### API 오류
+
 1. 토큰 형식이 올바른지 확인
 2. 인터넷 연결 확인
 3. Discord: 봇이 서버에서 제거되지 않았는지 확인
@@ -364,6 +378,7 @@ bun run dev
 서버를 수동으로 테스트하려면:
 
 **Telegram:**
+
 ```bash
 export DMPLZ_PROVIDER=telegram
 export DMPLZ_TELEGRAM_BOT_TOKEN="your_token"
@@ -372,6 +387,7 @@ bun run src/index.ts
 ```
 
 **Discord:**
+
 ```bash
 export DMPLZ_PROVIDER=discord
 export DMPLZ_DISCORD_BOT_TOKEN="your_token"

@@ -106,7 +106,7 @@ Add these to `~/.claude/settings.json`:
 Or if published to GitHub:
 
 ```bash
-/plugin marketplace add yourusername/dm-plz
+/plugin marketplace add https://github.com/j-token/dm-plz-claude.git
 /plugin install dm-plz@dm-plz
 ```
 
@@ -116,18 +116,17 @@ Restart Claude Code. Done!
 
 ## Configuration Variables
 
-| Variable                    | Required                 | Description                                      |
-| --------------------------- | ------------------------ | ------------------------------------------------ |
-| `DMPLZ_PROVIDER`            | No (default: `telegram`) | Platform to use: `telegram` or `discord`         |
-| `DMPLZ_TELEGRAM_BOT_TOKEN`  | Yes (for Telegram)       | Bot token from @BotFather                        |
-| `DMPLZ_TELEGRAM_CHAT_ID`    | Yes (for Telegram)       | Your personal chat ID from @userinfobot          |
-| `DMPLZ_DISCORD_BOT_TOKEN`   | Yes (for Discord)        | Bot token from Discord Developer Portal          |
-| `DMPLZ_DISCORD_CHANNEL_ID`  | Yes (for Discord)        | Channel ID (enable Developer Mode to copy)       |
-| `DMPLZ_DISCORD_DM_USER_ID`  | No (Discord)             | User ID for sending permission requests via DM   |
-| `DMPLZ_PERMISSION_CHAT_ID`         | No                       | Override chat/channel ID for permission requests |
-| `DMPLZ_QUESTION_TIMEOUT_MS`        | No (default: `10800000`) | Timeout for waiting for responses (3 hours)      |
-| `DMPLZ_REJECT_REASON_TIMEOUT_MS`   | No (default: `600000`)   | Timeout for entering a rejection reason (10 min) |
-
+| Variable                         | Required                 | Description                                      |
+| -------------------------------- | ------------------------ | ------------------------------------------------ |
+| `DMPLZ_PROVIDER`                 | No (default: `telegram`) | Platform to use: `telegram` or `discord`         |
+| `DMPLZ_TELEGRAM_BOT_TOKEN`       | Yes (for Telegram)       | Bot token from @BotFather                        |
+| `DMPLZ_TELEGRAM_CHAT_ID`         | Yes (for Telegram)       | Your personal chat ID from @userinfobot          |
+| `DMPLZ_DISCORD_BOT_TOKEN`        | Yes (for Discord)        | Bot token from Discord Developer Portal          |
+| `DMPLZ_DISCORD_CHANNEL_ID`       | Yes (for Discord)        | Channel ID (enable Developer Mode to copy)       |
+| `DMPLZ_DISCORD_DM_USER_ID`       | No (Discord)             | User ID for sending permission requests via DM   |
+| `DMPLZ_PERMISSION_CHAT_ID`       | No                       | Override chat/channel ID for permission requests |
+| `DMPLZ_QUESTION_TIMEOUT_MS`      | No (default: `10800000`) | Timeout for waiting for responses (3 hours)      |
+| `DMPLZ_REJECT_REASON_TIMEOUT_MS` | No (default: `600000`)   | Timeout for entering a rejection reason (10 min) |
 
 Permission requests use `DMPLZ_PERMISSION_CHAT_ID` first if set, otherwise `DMPLZ_DISCORD_DM_USER_ID` (Discord only), and finally the default chat/channel.
 

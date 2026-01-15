@@ -9,6 +9,7 @@ Telegram 또는 Discord 중 선택하세요.
 ## Option 1: Telegram으로 설치
 
 ### 1. 텔레그램 봇 생성
+
 1. 텔레그램에서 [@BotFather](https://t.me/BotFather) 검색
 2. `/newbot` 명령어 입력
 3. 봇 이름 입력 (예: "My Claude Bot")
@@ -16,6 +17,7 @@ Telegram 또는 Discord 중 선택하세요.
 5. **봇 토큰** 복사 (예: `123456789:ABCdefGHIjklMNOpqrsTUVwxyz`)
 
 ### 2. Chat ID 확인
+
 1. 텔레그램에서 [@userinfobot](https://t.me/userinfobot) 검색
 2. 봇에 메시지 전송
 3. **Chat ID** 복사 (예: `123456789`)
@@ -39,6 +41,7 @@ Telegram 또는 Discord 중 선택하세요.
 ## Option 2: Discord로 설치
 
 ### 1. Discord 봇 생성
+
 1. [Discord Developer Portal](https://discord.com/developers/applications) 접속
 2. "New Application" 클릭하고 이름 입력
 3. "Bot" 섹션으로 이동하여 "Add Bot" 클릭
@@ -46,6 +49,7 @@ Telegram 또는 Discord 중 선택하세요.
 5. "Privileged Gateway Intents"에서 "MESSAGE CONTENT INTENT" 활성화
 
 ### 2. 봇을 서버에 초대
+
 1. "OAuth2" > "URL Generator"로 이동
 2. Scopes에서 `bot` 선택
 3. Permissions에서 다음 권한 선택:
@@ -56,6 +60,7 @@ Telegram 또는 Discord 중 선택하세요.
 5. 서버를 선택하고 봇을 승인
 
 ### 3. Channel ID 확인
+
 1. Discord 설정에서 개발자 모드 활성화 (설정 > 고급 > 개발자 모드)
 2. 알림을 받을 채널을 우클릭
 3. "ID 복사"를 클릭하여 **Channel ID** 복사
@@ -88,7 +93,7 @@ Telegram 또는 Discord 중 선택하세요.
 /plugin install dm-plz@dm-plz
 
 # 또는 GitHub에서 설치할 경우
-/plugin marketplace add yourusername/dm-plz
+/plugin marketplace add https://github.com/j-token/dm-plz-claude.git
 /plugin install dm-plz@dm-plz
 ```
 
@@ -115,11 +120,13 @@ Telegram/Discord로 메시지가 오면 성공!
 ## 문제 해결
 
 ### Telegram: 봇이 메시지를 보내지 않음
+
 - 봇 토큰과 Chat ID가 올바른지 확인
 - 봇과 대화를 시작했는지 확인 (`/start` 명령어 전송)
 - `claude --debug`로 로그 확인
 
 ### Discord: 봇이 메시지를 보내지 않음
+
 - 봇 토큰과 Channel ID가 올바른지 확인
 - 봇이 서버에 초대되었는지 확인
 - 봇에게 필요한 권한이 있는지 확인
@@ -127,11 +134,13 @@ Telegram/Discord로 메시지가 오면 성공!
 - `claude --debug`로 로그 확인
 
 ### "Configuration error" 메시지
+
 - `~/.claude/settings.json` 파일이 올바르게 작성되었는지 확인
 - JSON 문법 오류가 없는지 확인
 - `DMPLZ_PROVIDER` 값이 `telegram` 또는 `discord`인지 확인
 
 ### 플러그인이 로드되지 않음
+
 - Claude Code 재시작
 - 플러그인 경로가 올바른지 확인
 
@@ -140,12 +149,14 @@ Telegram/Discord로 메시지가 오면 성공!
 ## 사용 예시
 
 ### 1. 간단한 알림
+
 ```
 Claude: "작업 완료했어! 알려줘"
 → Telegram/Discord로 알림 전송
 ```
 
 ### 2. 질문하기
+
 ```
 Claude: "버그 3개 발견했는데, 지금 고칠까 아니면 이슈 만들까?"
 → Telegram/Discord로 질문 전송
@@ -154,6 +165,7 @@ Claude: "버그 3개 발견했는데, 지금 고칠까 아니면 이슈 만들�
 ```
 
 ### 3. 상세 알림
+
 ```
 Claude: "배포 완료! 상세 정보를 보내줘"
 → 제목과 내용이 포함된 알림 전송
@@ -166,7 +178,7 @@ Claude: "배포 완료! 상세 정보를 보내줘"
 ```json
 {
   "env": {
-    "DMPLZ_PROVIDER": "telegram",  // 또는 "discord"
+    "DMPLZ_PROVIDER": "telegram", // 또는 "discord"
 
     // Telegram 설정 (DMPLZ_PROVIDER=telegram일 때)
     "DMPLZ_TELEGRAM_BOT_TOKEN": "your_token",
@@ -175,11 +187,11 @@ Claude: "배포 완료! 상세 정보를 보내줘"
     // Discord 설정 (DMPLZ_PROVIDER=discord일 때)
     "DMPLZ_DISCORD_BOT_TOKEN": "your_token",
     "DMPLZ_DISCORD_CHANNEL_ID": "your_channel_id",
-    "DMPLZ_DISCORD_DM_USER_ID": "your_user_id",  // 권한 요청을 DM으로 보낼 사용자 ID
+    "DMPLZ_DISCORD_DM_USER_ID": "your_user_id", // 권한 요청을 DM으로 보낼 사용자 ID
 
     // 공통 설정 (선택사항)
-    "DMPLZ_PERMISSION_CHAT_ID": "your_permission_chat_id",  // 권한 요청을 보낼 별도 채팅/채널 ID
-    "DMPLZ_QUESTION_TIMEOUT_MS": "10800000"  // 3시간 (기본값)
+    "DMPLZ_PERMISSION_CHAT_ID": "your_permission_chat_id", // 권한 요청을 보낼 별도 채팅/채널 ID
+    "DMPLZ_QUESTION_TIMEOUT_MS": "10800000" // 3시간 (기본값)
   }
 }
 ```
@@ -196,9 +208,9 @@ Claude: "배포 완료! 상세 정보를 보내줘"
 
 ## 플랫폼 비교
 
-| 항목 | Telegram | Discord |
-|------|----------|---------|
-| 설정 난이도 | 매우 쉬움 | 쉬움 |
-| 개인 DM | 지원 | 채널을 통해 지원 |
-| 응답 속도 | 10초 간격 폴링 | 2초 간격 폴링 |
-| 적합한 용도 | 개인 알림 | 팀/서버 알림 |
+| 항목        | Telegram       | Discord          |
+| ----------- | -------------- | ---------------- |
+| 설정 난이도 | 매우 쉬움      | 쉬움             |
+| 개인 DM     | 지원           | 채널을 통해 지원 |
+| 응답 속도   | 10초 간격 폴링 | 2초 간격 폴링    |
+| 적합한 용도 | 개인 알림      | 팀/서버 알림     |
