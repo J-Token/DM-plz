@@ -144,7 +144,7 @@ function loadConfig(): ServerConfig {
     const chatId = process.env.DMPLZ_TELEGRAM_CHAT_ID;
 
     if (!botToken || !chatId) {
-      throw new Error('Telegram 설정이 필요합니다: DMPLZ_TELEGRAM_BOT_TOKEN, DMPLZ_TELEGRAM_CHAT_ID');
+      throw new Error('Telegram configuration is required: DMPLZ_TELEGRAM_BOT_TOKEN, DMPLZ_TELEGRAM_CHAT_ID');
     }
 
     return {
@@ -165,7 +165,7 @@ function loadConfig(): ServerConfig {
     const chatId = process.env.DMPLZ_DISCORD_CHANNEL_ID;
 
     if (!botToken || !chatId) {
-      throw new Error('Discord 설정이 필요합니다: DMPLZ_DISCORD_BOT_TOKEN, DMPLZ_DISCORD_CHANNEL_ID');
+      throw new Error('Discord configuration is required: DMPLZ_DISCORD_BOT_TOKEN, DMPLZ_DISCORD_CHANNEL_ID');
     }
 
     return {
@@ -378,16 +378,18 @@ function buildRejectionSystemMessage(reason: string, reasonSource: RejectReasonS
 
   if (reasonSource === 'user_input' && trimmedReason.length > 0) {
     return [
-      '사용자가 권한 요청을 거부했습니다.',
-      `새 지시: ${trimmedReason}`,
-      '이 지시를 새로운 사용자 요청으로 간주하고, 현재 시도하던 작업과 툴 호출을 중단한 뒤 다시 계획하세요.',
+       'The user rejected the permission request.',
+       `Next instruction: ${trimmedReason}`,
+       'Treat this as a new user request. Stop the current attempt and re-plan before making further tool calls.',
+
     ].join('\n');
   }
 
-  return [
-    '사용자가 권한 요청을 거부했습니다.',
-    '사유가 없으므로 현재 작업을 중단하고 다음 지시를 AskUserQuestion으로 요청하세요.',
-  ].join('\n');
+   return [
+     'The user rejected the permission request.',
+     'No reason was provided. Stop the current attempt and ask for the next instruction via AskUserQuestion.',
+   ].join('\n');
+
 }
 
 /**
@@ -619,13 +621,16 @@ function formatToolInput(toolName: string, toolInput: Record<string, unknown>): 
       return `\`\`\`\n${toolInput.command || '(no command)'}\n\`\`\``;
 
     case 'Write':
-      return `파일: \`${toolInput.file_path}\`\n내용 길이: ${String(toolInput.content || '').length}자`;
+      return `File: \`${toolInput.file_path}\`\nContent length: ${String(toolInput.content || '').length} chars`;
+
 
     case 'Edit':
-      return `파일: \`${toolInput.file_path}\`\n변경: "${String(toolInput.old_string || '').slice(0, 50)}..." → "${String(toolInput.new_string || '').slice(0, 50)}..."`;
+      return `File: \`${toolInput.file_path}\`\nChange: "${String(toolInput.old_string || '').slice(0, 50)}..." → "${String(toolInput.new_string || '').slice(0, 50)}..."`;
+
 
     case 'Read':
-      return `파일: \`${toolInput.file_path}\``;
+      return `File: \`${toolInput.file_path}\``;
+
 
     default:
       return JSON.stringify(toolInput, null, 2).slice(0, 500);
@@ -644,25 +649,35 @@ function getToolDescription(toolName: string, toolInput: Record<string, unknown>
   // 도구별 기본 설명
   switch (toolName) {
     case 'Bash':
-      return '터미널 명령 실행';
+      return 'Run a terminal command';
+
     case 'Write':
-      return '파일 생성/덮어쓰기';
+      return 'Create/overwrite a file';
+
     case 'Edit':
-      return '파일 수정';
+      return 'Edit a file';
+
     case 'Read':
-      return '파일 읽기';
+      return 'Read a file';
+
     case 'Glob':
-      return '파일 검색';
+      return 'Search files';
+
     case 'Grep':
-      return '내용 검색';
+      return 'Search contents';
+
     case 'Task':
-      return '하위 작업 실행';
+      return 'Run a subtask';
+
     case 'WebFetch':
-      return '웹 페이지 가져오기';
+      return 'Fetch a web page';
+
     case 'WebSearch':
-      return '웹 검색';
+      return 'Search the web';
+
     default:
-      return `${toolName} 도구 사용`;
+      return `Use tool: ${toolName}`;
+
   }
 }
 
@@ -673,15 +688,16 @@ function createPermissionMessage(input: PermissionRequestInput): string {
   const toolDescription = formatToolInput(input.tool_name, input.tool_input);
   const reason = getToolDescription(input.tool_name, input.tool_input);
 
-  return `🔐 *Claude Code 권한 요청*
+   return `🔐 *Claude Code Permission Request*
 
-*이유:* ${reason}
-*도구:* \`${input.tool_name}\`
-*작업 디렉토리:* \`${input.cwd}\`
+ *Reason:* ${reason}
+ *Tool:* \`${input.tool_name}\`
+ *Working directory:* \`${input.cwd}\`
 
-${toolDescription}
+ ${toolDescription}
 
-승인하시겠습니까?`;
+ Approve?`;
+
 }
 
 /**

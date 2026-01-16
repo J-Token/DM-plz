@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
 
 /**
- * DM-Plz MCP 서버
+ * DM-Plz MCP Server
  *
- * Claude가 입력이 필요하거나 진행 상황을 보고할 때
- * Telegram/Discord로 메시지를 보내는 stdio 기반 MCP 서버입니다.
+ * A stdio-based MCP server that sends messages via Telegram/Discord
+ * when Claude needs user input or wants to report progress.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -17,12 +17,12 @@ import { createProvider } from './providers/index.js';
 import type { ServerConfig, MessagingProvider } from './types.js';
 
 /**
- * 환경 변수에서 서버 설정을 로드합니다.
+ * Loads server configuration from environment variables.
  */
 function loadConfig(): ServerConfig {
   const provider = (process.env.DMPLZ_PROVIDER || 'telegram') as 'telegram' | 'discord';
 
-  // 플랫폼별 토큰/채팅 ID
+  // Platform-specific token/chat ID
   let botToken: string | undefined;
   let chatId: string | undefined;
 
@@ -68,10 +68,10 @@ function loadConfig(): ServerConfig {
 }
 
 /**
- * MCP 서버를 초기화하고 실행합니다.
+ * Initializes and runs the MCP server.
  */
 async function main() {
-  // 설정 로드
+  // Load configuration
   let config: ServerConfig;
   try {
     config = loadConfig();
@@ -80,7 +80,7 @@ async function main() {
     process.exit(1);
   }
 
-  // 메시징 프로바이더 생성
+  // Create messaging provider
   let messagingProvider: MessagingProvider;
   try {
     messagingProvider = createProvider(config);
@@ -89,7 +89,7 @@ async function main() {
     process.exit(1);
   }
 
-  // 봇 연결 확인
+  // Verify bot connection
   console.error(`Connecting to ${config.provider}...`);
   try {
     const info = await messagingProvider.getInfo();
@@ -103,7 +103,7 @@ async function main() {
     process.exit(1);
   }
 
-  // MCP 서버 생성
+  // Create MCP server
   const mcpServer = new Server(
     {
       name: 'dm-plz',
@@ -116,10 +116,10 @@ async function main() {
     }
   );
 
-  // 프로바이더 이름 접두사
+  // Provider name prefix
   const providerName = config.provider.charAt(0).toUpperCase() + config.provider.slice(1);
 
-  // 도구 목록 요청 처리 핸들러
+  // Handler for tool list requests
   mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
       tools: [
@@ -210,7 +210,7 @@ async function main() {
     };
   });
 
-  // 도구 실행 요청 처리 핸들러
+  // Handler for tool execution requests
   mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
     try {
       const { name, arguments: args } = request.params;
@@ -239,13 +239,13 @@ async function main() {
           parse_mode?: 'Markdown' | 'HTML';
         };
 
-        // 질문 전송
+        // Send question
         await messagingProvider.sendMessage(question, parse_mode);
 
         console.error('Question sent, waiting for reply...');
 
         try {
-          // 사용자 응답 대기
+          // Wait for user response
           const reply = await messagingProvider.waitForReply(config.questionTimeoutMs);
 
           console.error(`Received reply: ${reply}`);
@@ -281,7 +281,7 @@ async function main() {
           parse_mode?: 'Markdown' | 'HTML';
         };
 
-        // 제목을 포함한 메시지로 포맷
+        // Format message with title
         const formattedMessage =
           parse_mode === 'HTML'
             ? `<b>${title}</b>\n\n${message}`
@@ -310,7 +310,7 @@ async function main() {
         console.error('Permission request sent, waiting for response...');
 
         try {
-          // 사용자 승인 요청
+          // Request user approval
           const approved = await messagingProvider.requestPermission(message, timeoutMs);
 
           console.error(`Permission ${approved ? 'approved' : 'rejected'}`);
@@ -358,7 +358,7 @@ async function main() {
     }
   });
 
-  // stdio로 MCP 서버 시작
+  // Start MCP server with stdio
   const transport = new StdioServerTransport();
   await mcpServer.connect(transport);
 
@@ -370,7 +370,7 @@ async function main() {
   console.error(`Question timeout: ${config.questionTimeoutMs}ms`);
   console.error('');
 
-  // 정상 종료 처리
+  // Handle graceful shutdown
   const shutdown = () => {
     console.error('\nShutting down...');
     process.exit(0);
@@ -380,7 +380,7 @@ async function main() {
   process.on('SIGTERM', shutdown);
 }
 
-// 최상위 예외를 처리합니다.
+// Handle top-level exceptions
 main().catch((error) => {
   console.error('Fatal error:', error);
   process.exit(1);

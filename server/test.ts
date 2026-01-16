@@ -13,7 +13,7 @@ import { createProvider } from './src/providers/index.js';
 import type { ServerConfig } from './src/types.js';
 
 /**
- * 테스트 실행 엔트리 포인트입니다.
+ * Test entrypoint.
  */
 async function main() {
   console.log('🧪 DM-Plz Configuration Test\n');

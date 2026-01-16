@@ -2,8 +2,8 @@
 /**
  * Claude Code AskUserQuestion Hook
  *
- * Claude Code의 AskUserQuestion 도구 호출을 텔레그램/디스코드로 라우팅합니다.
- * stdin으로 도구 입력을 받아서 사용자 응답을 JSON으로 출력합니다.
+ * Routes Claude Code AskUserQuestion tool calls to Telegram/Discord.
+ * Reads tool input from stdin and outputs the user response as JSON.
  */
 
 import type { ServerConfig, PermissionResponse } from './types.js';
@@ -35,7 +35,7 @@ interface HookOutput {
 }
 
 /**
- * 환경 변수에서 설정을 로드합니다.
+ * Loads configuration from environment variables.
  */
 function loadConfig(): ServerConfig {
   const provider = (process.env.DMPLZ_PROVIDER || 'telegram') as 'telegram' | 'discord';
@@ -46,7 +46,8 @@ function loadConfig(): ServerConfig {
     const chatId = process.env.DMPLZ_TELEGRAM_CHAT_ID;
 
     if (!botToken || !chatId) {
-      throw new Error('Telegram 설정이 필요합니다: DMPLZ_TELEGRAM_BOT_TOKEN, DMPLZ_TELEGRAM_CHAT_ID');
+      throw new Error('Telegram configuration is required: DMPLZ_TELEGRAM_BOT_TOKEN, DMPLZ_TELEGRAM_CHAT_ID');
+
     }
 
     return {
@@ -61,7 +62,8 @@ function loadConfig(): ServerConfig {
     const chatId = process.env.DMPLZ_DISCORD_CHANNEL_ID;
 
     if (!botToken || !chatId) {
-      throw new Error('Discord 설정이 필요합니다: DMPLZ_DISCORD_BOT_TOKEN, DMPLZ_DISCORD_CHANNEL_ID');
+      throw new Error('Discord configuration is required: DMPLZ_DISCORD_BOT_TOKEN, DMPLZ_DISCORD_CHANNEL_ID');
+
     }
 
     return {
@@ -76,7 +78,7 @@ function loadConfig(): ServerConfig {
 }
 
 /**
- * stdin에서 JSON 입력을 읽습니다.
+ * Reads JSON input from stdin.
  */
 async function readStdin(): Promise<string> {
   const chunks: string[] = [];
@@ -125,7 +127,7 @@ class TelegramQuestionHandler {
   }
 
   /**
-   * 초기 업데이트 ID를 설정합니다.
+   * Initializes the update ID.
    */
   async initialize(): Promise<void> {
     const updates = await this.getUpdates(0, 0);
@@ -135,20 +137,21 @@ class TelegramQuestionHandler {
   }
 
   /**
-   * 질문을 전송하고 응답을 받습니다.
+   * Sends a question and waits for a response.
    */
   async askQuestion(question: Question, timeoutMs: number): Promise<string> {
     const startTime = Date.now();
     const pollTimeout = 10;
 
-    // 질문 메시지 생성
-    let messageText = `❓ *Claude Code 질문*\n\n`;
+    // Build question message
+    let messageText = `❓ *Claude Code Question*\n\n`;
+
     if (question.header) {
       messageText += `*[${question.header}]*\n`;
     }
     messageText += `${question.question}\n\n`;
 
-    // 옵션 설명 추가
+    // Add option descriptions
     question.options.forEach((opt, idx) => {
       messageText += `${idx + 1}. *${opt.label}*`;
       if (opt.description) {
@@ -157,10 +160,10 @@ class TelegramQuestionHandler {
       messageText += '\n';
     });
 
-    // 인라인 키보드 생성
+    // Build inline keyboard
     const keyboard: { text: string; callback_data: string }[][] = [];
 
-    // 옵션 버튼 (2개씩 한 줄에)
+    // Option buttons (2 per row)
     for (let i = 0; i < question.options.length; i += 2) {
       const row: { text: string; callback_data: string }[] = [];
       row.push({
@@ -176,10 +179,11 @@ class TelegramQuestionHandler {
       keyboard.push(row);
     }
 
-    // 커스텀 입력 버튼
-    keyboard.push([{ text: '✏️ 직접 입력', callback_data: 'custom_input' }]);
+    // Custom input button
+    keyboard.push([{ text: '✏️ Custom input', callback_data: 'custom_input' }]);
 
-    // 메시지 전송
+
+    // Send message
     const params = {
       chat_id: this.chatId,
       text: messageText,
@@ -203,12 +207,12 @@ class TelegramQuestionHandler {
     const messageId = data.result.message_id;
     const currentUpdateId = this.lastUpdateId;
 
-    // 응답 대기
+    // Wait for response
     while (Date.now() - startTime < timeoutMs) {
       const updates = await this.getUpdates(currentUpdateId + 1, pollTimeout);
 
       for (const update of updates) {
-        // 콜백 쿼리 (버튼 클릭)
+        // Callback query (button click)
         if (update.callback_query) {
           const query = update.callback_query;
           const queryChatId = query.message?.chat.id?.toString();
@@ -218,15 +222,16 @@ class TelegramQuestionHandler {
           await this.answerCallbackQuery(query.id);
 
           if (query.data === 'custom_input') {
-            // 커스텀 입력 모드
-            await this.sendMessage('💬 답변을 직접 입력해주세요:');
+            // Custom input mode
+            await this.sendMessage('💬 Please type your answer:');
+
             const customAnswer = await this.waitForTextMessage(timeoutMs - (Date.now() - startTime));
-            await this.editMessageReplyMarkup(messageId); // 버튼 제거
+            await this.editMessageReplyMarkup(messageId); // Remove buttons
             return customAnswer;
           } else if (query.data?.startsWith('opt_')) {
             const optIndex = parseInt(query.data.replace('opt_', ''), 10);
             const selectedOption = question.options[optIndex];
-            await this.editMessageReplyMarkup(messageId); // 버튼 제거
+            await this.editMessageReplyMarkup(messageId); // Remove buttons
             return selectedOption.label;
           }
         }
@@ -241,7 +246,7 @@ class TelegramQuestionHandler {
   }
 
   /**
-   * 텍스트 메시지를 대기합니다.
+   * Waits for a text message.
    */
   private async waitForTextMessage(timeoutMs: number): Promise<string> {
     const startTime = Date.now();
@@ -266,7 +271,7 @@ class TelegramQuestionHandler {
   }
 
   /**
-   * 메시지를 전송합니다.
+   * Sends a message.
    */
   private async sendMessage(text: string): Promise<void> {
     await fetch(`${this.baseUrl}/sendMessage`, {
@@ -280,7 +285,7 @@ class TelegramQuestionHandler {
   }
 
   /**
-   * 메시지의 reply_markup을 제거합니다.
+   * Removes reply_markup from a message.
    */
   private async editMessageReplyMarkup(messageId: number): Promise<void> {
     await fetch(`${this.baseUrl}/editMessageReplyMarkup`, {
@@ -295,7 +300,7 @@ class TelegramQuestionHandler {
   }
 
   /**
-   * 콜백 쿼리에 응답합니다.
+   * Answers a callback query.
    */
   private async answerCallbackQuery(callbackQueryId: string): Promise<void> {
     await fetch(`${this.baseUrl}/answerCallbackQuery`, {
@@ -306,7 +311,7 @@ class TelegramQuestionHandler {
   }
 
   /**
-   * 업데이트를 가져옵니다.
+   * Fetches updates.
    */
   private async getUpdates(offset: number, timeout: number): Promise<TelegramUpdate[]> {
     const params = {
@@ -361,7 +366,7 @@ class DiscordQuestionHandler {
   }
 
   /**
-   * 봇 사용자 ID를 조회합니다.
+   * Fetches the bot user ID.
    */
   async initialize(): Promise<void> {
     const response = await fetch(`${this.baseUrl}/users/@me`, {
@@ -372,20 +377,21 @@ class DiscordQuestionHandler {
   }
 
   /**
-   * 질문을 전송하고 응답을 받습니다.
+   * Sends a question and waits for a response.
    */
   async askQuestion(question: Question, timeoutMs: number): Promise<string> {
     const startTime = Date.now();
     const pollInterval = 2000;
 
-    // 질문 메시지 생성
-    let messageText = `❓ **Claude Code 질문**\n\n`;
+    // Build question message
+    let messageText = `❓ **Claude Code Question**\n\n`;
+
     if (question.header) {
       messageText += `**[${question.header}]**\n`;
     }
     messageText += `${question.question}\n\n`;
 
-    // 옵션 설명 추가
+    // Add option descriptions
     question.options.forEach((opt, idx) => {
       messageText += `${idx + 1}. **${opt.label}**`;
       if (opt.description) {
@@ -394,9 +400,10 @@ class DiscordQuestionHandler {
       messageText += '\n';
     });
 
-    messageText += `\n숫자를 입력하거나 직접 답변을 입력하세요:`;
+    messageText += `\nReply with a number or type your answer:`;
 
-    // 메시지 전송
+
+    // Send message
     const response = await fetch(`${this.baseUrl}/channels/${this.channelId}/messages`, {
       method: 'POST',
       headers: {
@@ -409,7 +416,7 @@ class DiscordQuestionHandler {
     const sentMessage = await response.json() as DiscordMessage;
     const afterMessageId = sentMessage.id;
 
-    // 응답 대기
+    // Wait for response
     while (Date.now() - startTime < timeoutMs) {
       await new Promise(resolve => setTimeout(resolve, pollInterval));
 
@@ -420,13 +427,13 @@ class DiscordQuestionHandler {
 
         const text = msg.content.trim();
 
-        // 숫자로 옵션 선택
+        // Select option by number
         const num = parseInt(text, 10);
         if (!isNaN(num) && num >= 1 && num <= question.options.length) {
           return question.options[num - 1].label;
         }
 
-        // 직접 입력
+        // Direct input
         return text;
       }
 
@@ -439,7 +446,7 @@ class DiscordQuestionHandler {
   }
 
   /**
-   * 특정 메시지 이후의 메시지를 가져옵니다.
+   * Fetches messages after a specific message.
    */
   private async getMessagesAfter(afterId: string): Promise<DiscordMessage[]> {
     const response = await fetch(
@@ -454,7 +461,7 @@ class DiscordQuestionHandler {
 }
 
 /**
- * 결과를 JSON으로 출력합니다.
+ * Outputs the result as JSON.
  */
 function outputResult(answers: Record<string, string>): void {
   const output: HookOutput = {
@@ -465,7 +472,7 @@ function outputResult(answers: Record<string, string>): void {
 }
 
 /**
- * 오류 결과를 JSON으로 출력합니다.
+ * Outputs error result as JSON.
  */
 function outputError(reason: string): void {
   const output: HookOutput = {
@@ -476,21 +483,22 @@ function outputError(reason: string): void {
 }
 
 /**
- * 메인 함수
+ * Main function
  */
 async function main(): Promise<void> {
   try {
-    // stdin에서 입력 읽기
+    // Read input from stdin
     const inputText = await readStdin();
     const input = JSON.parse(inputText) as AskUserQuestionInput;
 
     const questions = input.tool_input?.questions;
     if (!questions || questions.length === 0) {
-      outputError('질문이 없습니다');
+      outputError('No questions provided');
+
       return;
     }
 
-    // 설정 로드
+    // Load configuration
     const config = loadConfig();
     const answers: Record<string, string> = {};
 
@@ -501,7 +509,7 @@ async function main(): Promise<void> {
       );
       await handler.initialize();
 
-      // 각 질문에 대해 응답 수집
+      // Collect responses for each question
       for (let i = 0; i < questions.length; i++) {
         const answer = await handler.askQuestion(questions[i], config.questionTimeoutMs);
         answers[`question-${i}`] = answer;
@@ -513,20 +521,21 @@ async function main(): Promise<void> {
       );
       await handler.initialize();
 
-      // 각 질문에 대해 응답 수집
+      // Collect responses for each question
       for (let i = 0; i < questions.length; i++) {
         const answer = await handler.askQuestion(questions[i], config.questionTimeoutMs);
         answers[`question-${i}`] = answer;
       }
     }
 
-    // 결과 출력
+    // Output result
     outputResult(answers);
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error(`Question hook error: ${errorMessage}`);
-    outputError(`질문 처리 중 오류: ${errorMessage}`);
+    outputError(`Error while handling question: ${errorMessage}`);
+
   }
 }
 

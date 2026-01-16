@@ -1,7 +1,7 @@
 /**
- * 프로바이더 팩토리
+ * Provider factory
  *
- * 설정에 따라 적절한 메시징 프로바이더를 생성합니다.
+ * Creates the appropriate messaging provider based on configuration.
  */
 
 import type { ServerConfig, MessagingProvider } from '../types.js';
@@ -9,7 +9,7 @@ import { TelegramProvider } from './telegram.js';
 import { DiscordProvider } from './discord.js';
 
 /**
- * 설정에 맞는 메시징 프로바이더를 생성합니다.
+ * Creates a messaging provider for the given configuration.
  */
 export function createProvider(config: ServerConfig): MessagingProvider {
   switch (config.provider) {
