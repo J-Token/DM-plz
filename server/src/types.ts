@@ -1,64 +1,64 @@
 /**
- * DM-Plz MCP 서버 설정
+ * DM-Plz MCP Server Configuration
  */
 export interface ServerConfig {
   /**
-   * 사용 플랫폼
+   * Messaging platform to use
    */
   provider: 'telegram' | 'discord';
   /**
-   * 봇 토큰
+   * Bot token
    */
   botToken: string;
   /**
-   * 기본 메시지 채팅/채널 ID
+   * Default message chat/channel ID
    */
   chatId: string;
   /**
-   * 질문 응답 대기 시간(밀리초)
+   * Timeout for waiting for question responses (in milliseconds)
    */
   questionTimeoutMs: number;
   /**
-   * 거부 사유 입력 대기 시간(밀리초)
+   * Timeout for waiting for rejection reason input (in milliseconds)
    */
   rejectReasonTimeoutMs: number;
   /**
-   * 거부 사유 최대 길이
+   * Maximum length for rejection reason
    */
   rejectReasonMaxChars: number;
   /**
-   * 거부 사유 로그 파일 경로
+   * File path for rejection reason logs
    */
   rejectReasonLogPath: string;
   /**
-   * 거부 사유 로그 로테이션 기준 바이트
+   * Log rotation threshold in bytes
    */
   rejectReasonLogRotateBytes: number;
   /**
-   * 거부 사유 로그 보관 파일 개수
+   * Maximum number of log files to retain
    */
   rejectReasonLogMaxFiles: number;
   /**
-   * 사유 없음 키워드 목록
+   * Keywords that indicate no reason provided
    */
   rejectReasonNoReasonKeywords: string[];
   /**
-   * 권한 요청을 보낼 채팅/채널 ID (선택)
+   * Chat/channel ID for permission requests (optional)
    */
   permissionChatId?: string;
   /**
-   * Discord 권한 요청을 DM으로 보낼 사용자 ID (선택)
+   * Discord user ID to send permission requests via DM (optional)
    */
   discordDmUserId?: string;
 }
 
 /**
- * 거부 사유 출처 타입
+ * Source type for rejection reason
  */
 export type RejectReasonSource = 'user_input' | 'explicit_skip' | 'timeout';
 
 /**
- * 거부 응답 타입
+ * Rejection response type
  */
 export interface RejectPermissionResponse {
   type: 'reject';
@@ -67,33 +67,43 @@ export interface RejectPermissionResponse {
 }
 
 /**
- * 권한 요청 응답 타입
+ * Permission request response type
  */
 export type PermissionResponse = 'approve' | 'approve_session' | RejectPermissionResponse;
 
 /**
- * 권한 요청 컨텍스트
+ * Permission request context
  */
 export interface PermissionRequestContext {
   requestId: string;
 }
 
 /**
- * 프로바이더 인터페이스 - 모든 메시징 프로바이더가 구현해야 함
+ * Provider interface - must be implemented by all messaging providers
  */
 export interface MessagingProvider {
   /**
-   * 메시지 전송
+   * Send a message
    */
   sendMessage(text: string, parseMode?: 'Markdown' | 'HTML'): Promise<void>;
 
   /**
-   * 사용자 응답 대기
+   * Send a message with reply keyboard buttons (buttons that auto-fill input)
+   * When user taps a button, the button text is sent as a message.
+   */
+  sendMessageWithKeyboard(
+    text: string,
+    buttonTexts: string[],
+    parseMode?: 'Markdown' | 'HTML'
+  ): Promise<void>;
+
+  /**
+   * Wait for user response
    */
   waitForReply(timeoutMs: number): Promise<string>;
 
   /**
-   * 사용자 승인 요청 (승인/거부/세션허용)
+   * Request user approval (approve/reject/approve for session)
    */
   requestPermission(
     message: string,
@@ -102,13 +112,13 @@ export interface MessagingProvider {
   ): Promise<PermissionResponse>;
 
   /**
-   * 프로바이더 정보 조회
+   * Get provider information
    */
   getInfo(): Promise<{ name: string; identifier: string }>;
 }
 
 /**
- * Telegram API 응답 타입
+ * Telegram API response types
  */
 export interface TelegramUser {
   id: number;
@@ -165,7 +175,7 @@ export interface TelegramResponse<T> {
 }
 
 /**
- * 대기 중인 질문 추적용 상태
+ * State for tracking pending questions
  */
 export interface QuestionState {
   questionId: string;
@@ -175,7 +185,7 @@ export interface QuestionState {
 }
 
 /**
- * Discord API 응답 타입
+ * Discord API response types
  */
 export interface DiscordUser {
   id: string;

@@ -1,7 +1,7 @@
 /**
- * Telegram 프로바이더
+ * Telegram Provider
  *
- * Telegram Bot API를 통한 메시징을 구현합니다.
+ * Implements messaging through the Telegram Bot API.
  */
 
 import type {
@@ -29,7 +29,7 @@ export class TelegramProvider implements MessagingProvider {
   private lastSentMessageId?: number;
 
   /**
-   * Telegram 프로바이더를 생성합니다.
+   * Creates a Telegram provider instance.
    */
   constructor(config: ServerConfig) {
     this.config = config;
@@ -37,12 +37,23 @@ export class TelegramProvider implements MessagingProvider {
   }
 
   /**
-   * 메시지를 전송합니다.
+   * Escapes special characters for Telegram Markdown V1.
+   * Characters: _ * ` [
+   */
+  private escapeTelegramMarkdown(text: string): string {
+    return text.replace(/([_*`\[])/g, '\\$1');
+  }
+
+  /**
+   * Sends a message.
    */
   async sendMessage(text: string, parseMode?: 'Markdown' | 'HTML'): Promise<void> {
+    // Escape special characters when using Markdown mode to prevent parsing issues
+    const processedText = parseMode === 'Markdown' ? this.escapeTelegramMarkdown(text) : text;
+
     const params: Record<string, string> = {
       chat_id: this.config.chatId,
-      text,
+      text: processedText,
     };
 
     if (parseMode) {
@@ -65,23 +76,67 @@ export class TelegramProvider implements MessagingProvider {
   }
 
   /**
-   * 거부 사유 입력 안내 메시지를 생성합니다.
+   * Sends a message with reply keyboard buttons.
+   * When user taps a button, the button text is sent as a message.
+   */
+  async sendMessageWithKeyboard(
+    text: string,
+    buttonTexts: string[],
+    parseMode?: 'Markdown' | 'HTML'
+  ): Promise<void> {
+    const processedText = parseMode === 'Markdown' ? this.escapeTelegramMarkdown(text) : text;
+
+    // Create keyboard buttons (one button per row for better visibility)
+    const keyboard = buttonTexts.map((buttonText) => [{ text: buttonText }]);
+
+    const params: Record<string, unknown> = {
+      chat_id: this.config.chatId,
+      text: processedText,
+      reply_markup: {
+        keyboard,
+        one_time_keyboard: true, // Hide keyboard after button press
+        resize_keyboard: true, // Fit buttons to their text
+        input_field_placeholder: 'Tap a button or type your message...',
+      },
+    };
+
+    if (parseMode) {
+      params.parse_mode = parseMode;
+    }
+
+    const response = await fetch(`${this.baseUrl}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+
+    const data = (await response.json()) as TelegramResponse<TelegramMessage>;
+
+    if (!data.ok) {
+      throw new Error(`Telegram API error: ${data.description || 'Unknown error'}`);
+    }
+
+    this.lastSentMessageId = data.result.message_id;
+  }
+
+  /**
+   * Builds the rejection reason prompt message.
    */
   private buildRejectReasonPrompt(timeoutMs: number): string {
     const timeoutMinutes = Math.max(Math.ceil(timeoutMs / 60000), 1);
 
     return [
-      '❌ 거부를 선택하셨습니다.',
-      '*거부 사유를 입력해주세요 (선택).*',
-      '입력한 사유는 Claude에게 "다음 지시"로 전달되어 작업이 다시 진행됩니다.',
-      '예: `1.0.5로 해줘`',
-      '사유 없이 거부하려면 아래 버튼을 누르세요.',
-      `시간 제한: ${timeoutMinutes}분`,
+      '❌ You selected Reject.',
+      '*Please enter a rejection reason (optional).*',
+      'Your reason will be sent to Claude as the "next instruction" so the work can continue.',
+      'Example: `Use 1.0.5`',
+      'To reject without a reason, tap the button below.',
+      `Time limit: ${timeoutMinutes} min`,
     ].join('\n');
   }
 
   /**
-   * 거부 사유 입력을 받을 채팅 ID를 결정합니다.
+   * Determines the chat ID for receiving rejection reason input.
    */
   private resolveRejectReasonChatId(permissionChatId: string): string {
     if (permissionChatId !== this.config.chatId) {
@@ -92,7 +147,7 @@ export class TelegramProvider implements MessagingProvider {
   }
 
   /**
-   * 거부 사유 입력 요청 메시지를 전송합니다.
+   * Sends the rejection reason prompt message.
    */
   private async sendRejectReasonPrompt(chatId: string, timeoutMs: number): Promise<number | null> {
     const params = {
@@ -100,7 +155,7 @@ export class TelegramProvider implements MessagingProvider {
       text: this.buildRejectReasonPrompt(timeoutMs),
       parse_mode: 'Markdown',
       reply_markup: {
-        inline_keyboard: [[{ text: '사유 없이 거부', callback_data: 'reject_no_reason' }]],
+        inline_keyboard: [[{ text: 'Reject without reason', callback_data: 'reject_no_reason' }]],
       },
     };
 
@@ -123,34 +178,33 @@ export class TelegramProvider implements MessagingProvider {
   }
 
   /**
-   * 만료 안내 메시지를 생성합니다.
+   * Builds the expiration notice message.
    */
   private buildExpiredNotice(requestId?: string): string {
     const suffix = requestId ? ` (request_id: ${requestId})` : '';
-    return `이 권한 요청은 이미 만료되었습니다.${suffix}`;
+    return `This permission request has already expired.${suffix}`;
   }
 
   /**
-   * 거부 사유 입력 결과 메시지를 생성합니다.
+   * Builds the rejection reason result notice message.
    */
   private buildRejectReasonResultNotice(result: RejectReasonResult): string {
     if (result.reasonSource === 'user_input') {
-      return '거부 사유가 입력되었습니다.';
+      return 'Rejection reason recorded.';
     }
 
     if (result.reasonSource === 'timeout') {
-      return '거부 사유 입력 시간이 만료되어 사유 없이 거부합니다.';
+      return 'Timed out waiting for a reason. Rejecting without a reason.';
     }
 
-    return '사유 없이 거부가 확정되었습니다.';
+    return 'Rejected without a reason.';
   }
 
   /**
-   * 봇 멘션 여부를 확인합니다.
+   * Checks if the bot is mentioned.
    */
   private isBotMentioned(message: TelegramMessage): boolean {
-
-    // @username으로 봇을 멘션했는지 확인
+    // Check if bot is mentioned via @username
     if (message.entities) {
       const hasMention = message.entities.some(
         (entity) => entity.type === 'mention' && message.text?.includes(`@${this.botUsername}`)
@@ -158,12 +212,12 @@ export class TelegramProvider implements MessagingProvider {
       if (hasMention) return true;
     }
 
-    // 봇 메시지에 대한 답글인지 확인
+    // Check if this is a reply to a bot message
     if (message.reply_to_message?.from?.username === this.botUsername) {
       return true;
     }
 
-    // 최근 보낸 메시지에 대한 답글인지 확인
+    // Check if this is a reply to the most recently sent message
     if (this.lastSentMessageId && message.reply_to_message?.message_id === this.lastSentMessageId) {
       return true;
     }
@@ -171,26 +225,26 @@ export class TelegramProvider implements MessagingProvider {
     return false;
   }
 
-   /**
-    * 대기 중인 업데이트를 소비합니다.
-    */
-   private async flushPendingUpdates(): Promise<void> {
-     await this.getUpdates(this.lastUpdateId + 1, 0);
-   }
+  /**
+   * Consumes pending updates.
+   */
+  private async flushPendingUpdates(): Promise<void> {
+    await this.getUpdates(this.lastUpdateId + 1, 0);
+  }
 
-   /**
-    * 사용자 응답을 대기합니다.
-    */
-   async waitForReply(timeoutMs: number): Promise<string> {
-     await this.flushPendingUpdates();
+  /**
+   * Waits for user response.
+   */
+  async waitForReply(timeoutMs: number): Promise<string> {
+    await this.flushPendingUpdates();
     const startTime = Date.now();
-    const pollTimeout = 10; // 10초마다 폴링
+    const pollTimeout = 10; // Poll every 10 seconds
     const currentUpdateId = this.lastUpdateId;
 
     while (Date.now() - startTime < timeoutMs) {
       const updates = await this.getUpdates(currentUpdateId + 1, pollTimeout);
 
-      // 설정된 채팅에서 봇을 멘션한 메시지만 필터링
+      // Filter only messages that mention the bot from the configured chat
       const messages = updates
         .filter((u) => u.message && u.message.chat.id.toString() === this.config.chatId)
         .map((u) => u.message!)
@@ -202,12 +256,12 @@ export class TelegramProvider implements MessagingProvider {
         });
 
       if (messages.length > 0) {
-        // 첫 번째 메시지 텍스트 반환
+        // Return the first message text
         const firstMessage = messages[0];
         return firstMessage.text || '(no text)';
       }
 
-      // 타임아웃 확인
+      // Check for timeout
       if (Date.now() - startTime >= timeoutMs) {
         throw new Error('Timeout waiting for user response');
       }
@@ -217,26 +271,24 @@ export class TelegramProvider implements MessagingProvider {
   }
 
   /**
-   * 승인/세션허용/거부 버튼으로 권한을 요청합니다.
+   * Requests permission using approve/session allow/reject buttons.
    */
   async requestPermission(
     message: string,
     timeoutMs: number,
     context?: PermissionRequestContext
   ): Promise<PermissionResponse> {
-    // 이전 업데이트가 남아 있으면 잘못된 버튼 응답을 처리할 수 있으므로 먼저 비웁니다.
+    // Flush pending updates first to avoid processing stale button responses.
     await this.flushPendingUpdates();
 
     const startTime = Date.now();
-    const pollTimeout = 10; // 10초마다 폴링
+    const pollTimeout = 10; // Poll every 10 seconds
     const currentUpdateId = this.lastUpdateId;
     const permissionChatId = this.config.permissionChatId || this.config.chatId;
     const reasonChatId = this.resolveRejectReasonChatId(permissionChatId);
     const rejectReasonTimeoutMs = this.config.rejectReasonTimeoutMs;
 
-
-
-    // 인라인 키보드로 승인/세션허용/거부 버튼 전송
+    // Send approve/session allow/reject buttons via inline keyboard
     const params = {
       chat_id: permissionChatId,
       text: message,
@@ -244,9 +296,9 @@ export class TelegramProvider implements MessagingProvider {
       reply_markup: {
         inline_keyboard: [
           [
-            { text: '✅ 승인', callback_data: 'approve' },
-            { text: '🔄 세션 허용', callback_data: 'approve_session' },
-            { text: '❌ 거부', callback_data: 'reject' },
+            { text: '✅ Approve', callback_data: 'approve' },
+            { text: '🔄 Approve for session', callback_data: 'approve_session' },
+            { text: '❌ Reject', callback_data: 'reject' },
           ],
         ],
       },
@@ -264,63 +316,63 @@ export class TelegramProvider implements MessagingProvider {
       throw new Error(`Telegram API error: ${data.description || 'Unknown error'}`);
     }
 
-    // 방금 보낸 메시지의 ID 저장 (이 메시지에 대한 응답만 처리하기 위해)
+    // Save the ID of the message just sent (to process only responses to this message)
     const sentMessageId = data.result.message_id;
     const originalMessage = message;
 
-    // 콜백 쿼리 응답 대기
+    // Wait for callback query response
     while (Date.now() - startTime < timeoutMs) {
       const updates = await this.getUpdates(currentUpdateId + 1, pollTimeout);
 
-      // 콜백 쿼리 탐색
+      // Search for callback queries
       for (const update of updates) {
         if (update.callback_query) {
           const query = update.callback_query;
           const queryChatId = query.message?.chat.id?.toString();
           const queryMessageId = query.message?.message_id;
 
-          // 채팅 ID 확인
+          // Verify chat ID
           if (queryChatId !== permissionChatId) {
             continue;
           }
 
-          // 방금 보낸 메시지에 대한 응답인지 확인 (이전 메시지 응답 무시)
+          // Check if this is a response to the message just sent (ignore responses to previous messages)
           if (queryMessageId !== sentMessageId) {
             continue;
           }
 
-          // 승인 처리
+          // Handle approval
           if (query.data === 'approve') {
-            await this.answerCallbackQuery(query.id, '✅ 승인되었습니다');
-            // 메시지 수정: 승인 상태 표시
+            await this.answerCallbackQuery(query.id, 'Approved');
+            // Edit message: show approved status
             await this.editMessageText(
               permissionChatId,
               sentMessageId,
-              `${originalMessage}\n\n✅ *승인됨*`,
+              `${originalMessage}\n\n✅ *Approved*`,
               { inline_keyboard: [] }
             );
             return 'approve';
           }
 
-          // 세션 허용 처리
+          // Handle session approval
           if (query.data === 'approve_session') {
-            await this.answerCallbackQuery(query.id, '🔄 세션 내 허용되었습니다');
-            // 메시지 수정: 세션 허용 상태 표시
+            await this.answerCallbackQuery(query.id, 'Approved for this session');
+            // Edit message: show session approval status
             await this.editMessageText(
               permissionChatId,
               sentMessageId,
-              `${originalMessage}\n\n🔄 *세션 내 허용됨*`,
+              `${originalMessage}\n\n🔄 *Approved for session*`,
               { inline_keyboard: [] }
             );
             return 'approve_session';
           }
 
-          // 거부 처리: 이유 입력 요청
+          // Handle rejection: request reason input
           if (query.data === 'reject') {
             const rejectNotice =
               reasonChatId !== permissionChatId
-                ? '❌ 거부 사유를 DM으로 입력해주세요'
-                : '❌ 거부 사유를 입력해주세요';
+                ? '❌ Please send the rejection reason via DM'
+                : '❌ Please enter the rejection reason';
             await this.answerCallbackQuery(query.id, rejectNotice);
 
             const remainingMs = Math.max(timeoutMs - (Date.now() - startTime), 0);
@@ -337,23 +389,24 @@ export class TelegramProvider implements MessagingProvider {
               await this.editMessageText(
                 permissionChatId,
                 sentMessageId,
-                `${originalMessage}\n\n❌ *거부됨*\n사유: 이유없음`,
+                `${originalMessage}\n\n❌ *Rejected*\nReason: none`,
                 { inline_keyboard: [] }
               );
               return { type: 'reject', reason: '', reasonSource: 'explicit_skip' };
             }
 
-            const reasonResult = waitTimeoutMs > 0
-              ? await this.waitForRejectReason(reasonPromptMessageId, waitTimeoutMs, reasonPromptChatId)
-              : ({ reason: '', reasonSource: 'timeout' } as RejectReasonResult);
+            const reasonResult =
+              waitTimeoutMs > 0
+                ? await this.waitForRejectReason(reasonPromptMessageId, waitTimeoutMs, reasonPromptChatId)
+                : ({ reason: '', reasonSource: 'timeout' } as RejectReasonResult);
 
             const trimmedReason = (reasonResult.reason || '').trim();
-            const reasonSummary = `사유: ${trimmedReason.length > 0 ? trimmedReason : '이유없음'}`;
+            const reasonSummary = `Reason: ${trimmedReason.length > 0 ? trimmedReason : 'none'}`;
 
             await this.editMessageText(
               permissionChatId,
               sentMessageId,
-              `${originalMessage}\n\n❌ *거부됨*\n${reasonSummary}`,
+              `${originalMessage}\n\n❌ *Rejected*\n${reasonSummary}`,
               { inline_keyboard: [] }
             );
 
@@ -370,23 +423,21 @@ export class TelegramProvider implements MessagingProvider {
               reasonSource: reasonResult.reasonSource,
             };
           }
-
         }
       }
 
-      // 타임아웃 확인
+      // Check for timeout
       if (Date.now() - startTime >= timeoutMs) {
         await this.markRequestExpired(permissionChatId, sentMessageId, originalMessage, context?.requestId);
         throw new Error('Timeout waiting for permission response');
       }
-
     }
 
     throw new Error('Timeout waiting for permission response');
   }
 
   /**
-   * 콜백 쿼리 응답을 전송합니다.
+   * Sends a callback query response.
    */
   private async answerCallbackQuery(callbackQueryId: string, text?: string): Promise<void> {
     await fetch(`${this.baseUrl}/answerCallbackQuery`, {
@@ -400,7 +451,7 @@ export class TelegramProvider implements MessagingProvider {
   }
 
   /**
-   * 만료 상태로 메시지를 갱신합니다.
+   * Updates the message to expired state.
    */
   private async markRequestExpired(
     chatId: string,
@@ -408,12 +459,12 @@ export class TelegramProvider implements MessagingProvider {
     originalMessage: string,
     requestId?: string
   ): Promise<void> {
-    const expiredText = `${originalMessage}\n\n⏱️ *만료됨*\n${this.buildExpiredNotice(requestId)}`;
+    const expiredText = `${originalMessage}\n\n⏱️ *Expired*\n${this.buildExpiredNotice(requestId)}`;
     await this.editMessageText(chatId, messageId, expiredText, { inline_keyboard: [] });
   }
 
   /**
-   * 메시지를 수정합니다.
+   * Edits a message.
    */
   private async editMessageText(
     chatId: string,
@@ -421,7 +472,6 @@ export class TelegramProvider implements MessagingProvider {
     text: string,
     replyMarkup?: Record<string, unknown>
   ): Promise<void> {
-
     const response = await fetch(`${this.baseUrl}/editMessageText`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -440,9 +490,8 @@ export class TelegramProvider implements MessagingProvider {
     }
   }
 
-
   /**
-   * 거부 사유 입력 또는 생략을 대기합니다.
+   * Waits for rejection reason input or skip.
    */
   private async waitForRejectReason(
     afterMessageId: number,
@@ -471,7 +520,7 @@ export class TelegramProvider implements MessagingProvider {
           }
 
           if (query.data === 'reject_no_reason') {
-            await this.answerCallbackQuery(query.id, '사유 없이 거부 처리되었습니다');
+            await this.answerCallbackQuery(query.id, 'Rejected without a reason');
             return { reason: '', reasonSource: 'explicit_skip' };
           }
         }
@@ -499,9 +548,8 @@ export class TelegramProvider implements MessagingProvider {
     return { reason: '', reasonSource: 'timeout' };
   }
 
-
   /**
-   * 봇 정보를 조회합니다.
+   * Retrieves bot information.
    */
   async getInfo(): Promise<{ name: string; identifier: string }> {
     const response = await fetch(`${this.baseUrl}/getMe`);
@@ -514,7 +562,7 @@ export class TelegramProvider implements MessagingProvider {
       throw new Error(`Telegram API error: ${data.description || 'Unknown error'}`);
     }
 
-    // 멘션 감지를 위해 봇 사용자명 저장
+    // Save bot username for mention detection
     this.botUsername = data.result.username;
 
     return {
@@ -524,7 +572,7 @@ export class TelegramProvider implements MessagingProvider {
   }
 
   /**
-   * 업데이트를 가져옵니다.
+   * Fetches updates.
    */
   private async getUpdates(offset: number, timeout: number = 30): Promise<TelegramUpdate[]> {
     const params: Record<string, string | number> = {
@@ -545,7 +593,7 @@ export class TelegramProvider implements MessagingProvider {
       throw new Error(`Telegram API error: ${data.description || 'Unknown error'}`);
     }
 
-    // 마지막 업데이트 ID 갱신
+    // Update the last update ID
     if (data.result.length > 0) {
       const maxId = Math.max(...data.result.map((u) => u.update_id));
       this.lastUpdateId = maxId;

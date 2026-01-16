@@ -138,7 +138,7 @@ function loadConfig(): ServerConfig {
     const chatId = process.env.DMPLZ_TELEGRAM_CHAT_ID;
 
     if (!botToken || !chatId) {
-      throw new Error('Telegram 설정이 필요합니다: DMPLZ_TELEGRAM_BOT_TOKEN, DMPLZ_TELEGRAM_CHAT_ID');
+      throw new Error('Telegram configuration is required: DMPLZ_TELEGRAM_BOT_TOKEN, DMPLZ_TELEGRAM_CHAT_ID');
     }
 
     return {
@@ -159,7 +159,7 @@ function loadConfig(): ServerConfig {
     const chatId = process.env.DMPLZ_DISCORD_CHANNEL_ID;
 
     if (!botToken || !chatId) {
-      throw new Error('Discord 설정이 필요합니다: DMPLZ_DISCORD_BOT_TOKEN, DMPLZ_DISCORD_CHANNEL_ID');
+      throw new Error('Discord configuration is required: DMPLZ_DISCORD_BOT_TOKEN, DMPLZ_DISCORD_CHANNEL_ID');
     }
 
     return {
@@ -233,7 +233,7 @@ function parseRejectLogLine(line: string): RejectLogEntry | null {
  */
 function formatRejectReason(reason: string | undefined): string {
   const trimmed = (reason || '').trim();
-  return trimmed.length > 0 ? trimmed : '이유없음';
+  return trimmed.length > 0 ? trimmed : 'none';
 }
 
 /**
@@ -340,11 +340,11 @@ function extractRecentWork(transcriptPath: string, maxLines: number = 50): strin
 
     // 요약 생성
     if (toolsUsed.size > 0) {
-      workSummary.push(`🔧 사용한 도구: ${Array.from(toolsUsed).slice(0, 5).join(', ')}`);
+      workSummary.push(`🔧 Tools used: ${Array.from(toolsUsed).slice(0, 5).join(', ')}`);
     }
     
     if (filesModified.size > 0) {
-      workSummary.push(`📁 작업한 파일: ${Array.from(filesModified).slice(0, 5).join(', ')}`);
+      workSummary.push(`📁 Files touched: ${Array.from(filesModified).slice(0, 5).join(', ')}`);
     }
 
     // 마지막 Assistant 메시지 (200자로 제한)
@@ -352,7 +352,7 @@ function extractRecentWork(transcriptPath: string, maxLines: number = 50): strin
       const truncated = lastAssistantMessage.length > 200 
         ? lastAssistantMessage.substring(0, 200) + '...'
         : lastAssistantMessage;
-      workSummary.push(`💬 마지막 응답: ${truncated}`);
+      workSummary.push(`💬 Last response: ${truncated}`);
     }
 
     return workSummary.join('\n');
@@ -363,28 +363,45 @@ function extractRecentWork(transcriptPath: string, maxLines: number = 50): strin
 }
 
 /**
+ * 빠른 응답 버튼 텍스트 목록
+ */
+const QUICK_REPLY_BUTTONS = [
+  '👍 Continue',
+  '✅ LGTM (Stop)',
+  '🔄 Retry',
+];
+
+/**
+ * LGTM 버튼인지 확인합니다 (인터럽트 트리거).
+ */
+function isLgtmButton(reply: string): boolean {
+  const normalized = reply.trim().toLowerCase();
+  return normalized.includes('lgtm') && normalized.includes('stop');
+}
+
+/**
  * 알림 메시지를 생성합니다.
  */
 function buildNotificationMessage(input: StopHookInput | null, recentRejection: RejectLogEntry | null): string {
   let message = recentRejection
-    ? '⛔ *권한 거부로 작업이 중단되었습니다.*\n\n'
-    : '🏁 *작업이 완료되었습니다.*\n\n';
+    ? '⛔ *Work stopped due to a permission rejection.*\n\n'
+    : '🏁 *Work is complete.*\n\n';
 
   if (recentRejection) {
     const toolName = recentRejection.tool_name || 'unknown';
     const reason = formatRejectReason(recentRejection.reason);
-    message += `*도구:* \`${toolName}\`\n*사유:* ${reason}\n\n`;
+    message += `*Tool:* \`${toolName}\`\n*Reason:* ${reason}\n\n`;
   }
 
   // Transcript에서 작업 내용 추출
   if (input?.transcript_path) {
     const workSummary = extractRecentWork(input.transcript_path);
     if (workSummary) {
-      message += `📋 *작업 요약:*\n${workSummary}\n\n`;
+      message += `📋 *Summary:*\n${workSummary}\n\n`;
     }
   }
 
-  message += '💬 다음 지시를 입력하면 계속 진행합니다:';
+  message += '💬 Tap a button or type your next instruction:';
 
   return message;
 }
@@ -403,10 +420,10 @@ function buildContinuationReason(reply: string, recentRejection: RejectLogEntry 
   const reason = formatRejectReason(recentRejection.reason);
 
   if (trimmedReply.length === 0) {
-    return `권한 거부로 중단됨. 도구=${toolName}, 요청=${reason}`;
+    return `Stopped due to permission rejection. tool=${toolName}, reason=${reason}`;
   }
 
-  return `권한 거부로 중단됨. 도구=${toolName}, 요청=${reason}\n추가 지시: ${trimmedReply}`;
+  return `Stopped due to permission rejection. tool=${toolName}, reason=${reason}\nNext instruction: ${trimmedReply}`;
 }
 
 /**
@@ -430,15 +447,24 @@ async function main() {
     // 봇 정보 초기화
     await provider.getInfo();
 
-    // 알림 메시지 생성 및 전송
+    // 알림 메시지 생성 및 키보드 버튼과 함께 전송
     const message = buildNotificationMessage(input, recentRejection);
-    await provider.sendMessage(message, 'Markdown');
+    await provider.sendMessageWithKeyboard(message, QUICK_REPLY_BUTTONS, 'Markdown');
 
-    // 사용자 응답 대기
+    // 사용자 응답 대기 (버튼 탭 또는 직접 입력)
     const reply = await provider.waitForReply(config.questionTimeoutMs);
 
-    // 응답이 있으면 exit code 2 + stderr JSON으로 continuation 요청
+    // 응답이 있으면 처리
     if (reply) {
+      // LGTM (Stop) 버튼 체크 - 인터럽트 처리
+      if (isLgtmButton(reply)) {
+        // 인터럽트 경고 메시지 전송
+        await provider.sendMessage('⚠️ *Stopping work.* Claude will not continue.\n\n✅ Work has been reviewed and approved.', 'Markdown');
+        // exit code 0 = Claude 멈춤 (인터럽트)
+        process.exit(0);
+      }
+
+      // 그 외 응답은 continuation 요청
       const continuationReason = buildContinuationReason(reply, recentRejection);
       const output: StopHookOutput = {
         continue: true,

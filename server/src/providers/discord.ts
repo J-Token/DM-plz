@@ -1,7 +1,7 @@
 /**
- * Discord 프로바이더
+ * Discord Provider
  *
- * Discord Bot API를 통한 메시징을 구현합니다.
+ * Implements messaging via the Discord Bot API.
  */
 
 import type {
@@ -28,27 +28,27 @@ export class DiscordProvider implements MessagingProvider {
   private dmChannelIds: Map<string, string> = new Map();
 
   /**
-   * Discord 프로바이더를 생성합니다.
+   * Creates a Discord provider instance.
    */
   constructor(config: ServerConfig) {
     this.config = config;
   }
 
   /**
-   * 메시지를 전송합니다.
+   * Sends a message.
    */
   async sendMessage(text: string, parseMode?: 'Markdown' | 'HTML'): Promise<void> {
-    // Discord는 기본적으로 Markdown을 사용합니다.
-    // HTML 모드가 요청되면 텍스트로 변환합니다.
+    // Discord uses Markdown by default.
+    // If HTML mode is requested, convert to text.
     let content = text;
     if (parseMode === 'HTML') {
-      // 기본 HTML → 텍스트 변환
+      // Basic HTML → text conversion
       content = text
         .replace(/<b>(.*?)<\/b>/g, '**$1**')
         .replace(/<i>(.*?)<\/i>/g, '*$1*')
         .replace(/<code>(.*?)<\/code>/g, '`$1`')
         .replace(/<a href="(.*?)">(.*?)<\/a>/g, '[$2]($1)')
-        .replace(/<[^>]*>/g, ''); // 남은 HTML 태그 제거
+        .replace(/<[^>]*>/g, ''); // Remove remaining HTML tags
     }
 
     const response = await fetch(`${this.baseUrl}/channels/${this.config.chatId}/messages`, {
@@ -70,77 +70,93 @@ export class DiscordProvider implements MessagingProvider {
   }
 
   /**
-   * 거부 사유 입력 안내 메시지를 생성합니다.
+   * Sends a message with quick reply options.
+   * Discord doesn't have reply keyboard, so options are shown as text hints.
+   */
+  async sendMessageWithKeyboard(
+    text: string,
+    buttonTexts: string[],
+    parseMode?: 'Markdown' | 'HTML'
+  ): Promise<void> {
+    // Append quick reply options as text
+    const quickReplies = buttonTexts.map((t) => `\`${t}\``).join(' | ');
+    const contentWithOptions = `${text}\n\n**Quick replies:** ${quickReplies}`;
+
+    await this.sendMessage(contentWithOptions, parseMode);
+  }
+
+  /**
+   * Builds the rejection reason prompt message.
    */
   private buildRejectReasonPrompt(timeoutMs: number, noReasonKeyword: string): string {
     const timeoutMinutes = Math.max(Math.ceil(timeoutMs / 60000), 1);
 
     return [
-      '❌ 거부를 선택하셨습니다.',
-      '**거부 사유를 입력해주세요 (선택).**',
-      '입력한 사유는 Claude에게 "다음 지시"로 전달되어 작업이 다시 진행됩니다.',
-      '예: `1.0.5로 해줘`',
-      `사유 없이 거부하려면 \`${noReasonKeyword}\` 를 입력하세요.`,
-      `시간 제한: ${timeoutMinutes}분`,
+      '❌ You selected Reject.',
+      '**Please enter a rejection reason (optional).**',
+      'Your reason will be sent to Claude as the "next instruction" so the work can continue.',
+      'Example: `Use 1.0.5`',
+      `To reject without a reason, type \`${noReasonKeyword}\`.`,
+      `Time limit: ${timeoutMinutes} min`,
     ].join('\n');
   }
 
   /**
-   * 만료 안내 메시지를 생성합니다.
+   * Builds the expiration notice message.
    */
   private buildExpiredNotice(requestId?: string): string {
     const suffix = requestId ? ` (request_id: ${requestId})` : '';
-    return `이 권한 요청은 이미 만료되었습니다.${suffix}`;
+    return `This permission request has already expired.${suffix}`;
   }
 
   /**
-   * 거부 사유 입력 결과 메시지를 생성합니다.
+   * Builds the rejection reason result notice message.
    */
   private buildRejectReasonResultNotice(result: RejectReasonResult): string {
     if (result.reasonSource === 'user_input') {
-      return '거부 사유가 입력되었습니다.';
+      return 'Rejection reason recorded.';
     }
 
     if (result.reasonSource === 'timeout') {
-      return '거부 사유 입력 시간이 만료되어 사유 없이 거부합니다.';
+      return 'Timed out waiting for a reason. Rejecting without a reason.';
     }
 
-    return '사유 없이 거부가 확정되었습니다.';
+    return 'Rejected without a reason.';
   }
 
   /**
-   * 사유 없음 키워드를 정규화합니다.
+   * Normalizes a no-reason keyword.
    */
   private normalizeKeyword(value: string): string {
     return value.trim().toLowerCase();
   }
 
   /**
-   * 사용자 응답을 대기합니다.
+   * Waits for a user response.
    */
   async waitForReply(timeoutMs: number): Promise<string> {
     const startTime = Date.now();
-    const pollInterval = 2000; // 2초마다 폴링 (Discord 레이트 리밋)
+    const pollInterval = 2000; // Poll every 2 seconds (Discord rate limit)
 
-    // 폴링 시작 기준 메시지 ID
+    // Message ID to start polling from
     const afterMessageId = this.lastMessageId;
 
     while (Date.now() - startTime < timeoutMs) {
-      // 레이트 리밋을 지키기 위해 대기
+      // Wait to respect rate limits
       await new Promise((resolve) => setTimeout(resolve, pollInterval));
 
       try {
         const messages = await this.getRecentMessages(afterMessageId);
 
         if (messages.length > 0) {
-          // 가장 최근 메시지 내용 반환
+          // Return the most recent message content
           return messages[0].content || '(no content)';
         }
       } catch (error) {
         console.error('Error polling for messages:', error);
       }
 
-      // 타임아웃 확인
+      // Check for timeout
       if (Date.now() - startTime >= timeoutMs) {
         throw new Error('Timeout waiting for user response');
       }
@@ -150,7 +166,7 @@ export class DiscordProvider implements MessagingProvider {
   }
 
   /**
-   * 승인/세션허용/거부 반응으로 권한을 요청합니다.
+   * Requests permission using approve/session allow/reject reactions.
    */
   async requestPermission(
     message: string,
@@ -158,16 +174,16 @@ export class DiscordProvider implements MessagingProvider {
     context?: PermissionRequestContext
   ): Promise<PermissionResponse> {
     const startTime = Date.now();
-    const pollInterval = 2000; // 2초마다 폴링 (Discord 레이트 리밋)
+    const pollInterval = 2000; // Poll every 2 seconds (Discord rate limit)
     const permissionChannelId = await this.resolvePermissionChannelId();
     const rejectReasonTimeoutMs = this.config.rejectReasonTimeoutMs;
 
-    // 권한 요청 메시지 본문과 안내 문구를 분리해서 관리합니다.
-    // (결정 후에는 안내 문구를 제거/무력화하기 위해 메시지를 수정합니다.)
+    // Manage the permission request message body and prompt separately.
+    // (After a decision, the message is edited to remove/disable the prompt.)
     const baseMessage = message;
-    const promptSuffix = '\n\n✅ 승인 | 🔄 세션 허용 | ❌ 거부';
+    const promptSuffix = '\n\n✅ Approve | 🔄 Approve for session | ❌ Reject';
 
-    // 권한 요청 메시지 전송
+    // Send permission request message
     const response = await fetch(`${this.baseUrl}/channels/${permissionChannelId}/messages`, {
       method: 'POST',
       headers: {
@@ -186,39 +202,39 @@ export class DiscordProvider implements MessagingProvider {
     const messageId = sentMessage.id;
     const originalMessage = sentMessage.content || `${baseMessage}${promptSuffix}`;
 
-    // 메시지에 반응 추가
+    // Add reactions to the message
     await this.addReaction(messageId, '✅');
-    await new Promise((resolve) => setTimeout(resolve, 500)); // 반응 간 짧은 지연
+    await new Promise((resolve) => setTimeout(resolve, 500)); // Short delay between reactions
     await this.addReaction(messageId, '🔄');
     await new Promise((resolve) => setTimeout(resolve, 500));
     await this.addReaction(messageId, '❌');
 
-    // 사용자 반응 폴링
+    // Poll for user reactions
     while (Date.now() - startTime < timeoutMs) {
       await new Promise((resolve) => setTimeout(resolve, pollInterval));
 
       try {
         const botId = await this.getBotUserId();
 
-        // 승인 반응 확인 (✅)
+        // Check for approve reaction (✅)
         const approveUsers = await this.getReactionUsers(messageId, '✅');
         const userApproved = approveUsers.some((user) => user.id !== botId && !user.bot);
         if (userApproved) {
-          await this.editMessage(permissionChannelId, messageId, `${baseMessage}\n\n✅ 승인됨`);
+          await this.editMessage(permissionChannelId, messageId, `${baseMessage}\n\n✅ Approved`);
           await this.clearReactionsBestEffort(permissionChannelId, messageId);
           return 'approve';
         }
 
-        // 세션 허용 반응 확인 (🔄)
+        // Check for session allow reaction (🔄)
         const sessionUsers = await this.getReactionUsers(messageId, '🔄');
         const userSessionApproved = sessionUsers.some((user) => user.id !== botId && !user.bot);
         if (userSessionApproved) {
-          await this.editMessage(permissionChannelId, messageId, `${baseMessage}\n\n🔄 세션 내 허용됨`);
+          await this.editMessage(permissionChannelId, messageId, `${baseMessage}\n\n🔄 Approved for session`);
           await this.clearReactionsBestEffort(permissionChannelId, messageId);
           return 'approve_session';
         }
 
-        // 거부 반응 확인 (❌)
+        // Check for reject reaction (❌)
         const rejectUsers = await this.getReactionUsers(messageId, '❌');
         const rejectUser = rejectUsers.find((user) => user.id !== botId && !user.bot);
         if (rejectUser) {
@@ -233,7 +249,7 @@ export class DiscordProvider implements MessagingProvider {
             console.error('Failed to open DM channel for reject reason:', error);
           }
 
-          // 거부 이유 입력 요청 메시지 전송
+          // Send rejection reason request message
           const reasonPromptResponse = await fetch(`${this.baseUrl}/channels/${reasonChannelId}/messages`, {
             method: 'POST',
             headers: {
@@ -246,22 +262,23 @@ export class DiscordProvider implements MessagingProvider {
           });
 
           if (!reasonPromptResponse.ok) {
-            await this.editMessage(permissionChannelId, messageId, `${baseMessage}\n\n❌ 거부됨\n사유: 이유없음`);
+            await this.editMessage(permissionChannelId, messageId, `${baseMessage}\n\n❌ Rejected\nReason: none`);
             await this.clearReactionsBestEffort(permissionChannelId, messageId);
             return { type: 'reject', reason: '', reasonSource: 'explicit_skip' };
           }
 
           const reasonPromptMessage = (await reasonPromptResponse.json()) as DiscordMessage;
 
-          const reasonResult = waitTimeoutMs > 0
-            ? await this.waitForRejectReason(
-                reasonPromptMessage.id,
-                waitTimeoutMs,
-                reasonChannelId,
-                rejectUser.id,
-                this.config.rejectReasonNoReasonKeywords
-              )
-            : ({ reason: '', reasonSource: 'timeout' } as RejectReasonResult);
+          const reasonResult =
+            waitTimeoutMs > 0
+              ? await this.waitForRejectReason(
+                  reasonPromptMessage.id,
+                  waitTimeoutMs,
+                  reasonChannelId,
+                  rejectUser.id,
+                  this.config.rejectReasonNoReasonKeywords
+                )
+              : ({ reason: '', reasonSource: 'timeout' } as RejectReasonResult);
 
           await this.editMessage(
             reasonChannelId,
@@ -270,9 +287,9 @@ export class DiscordProvider implements MessagingProvider {
           );
 
           const trimmedReason = (reasonResult.reason || '').trim();
-          const reasonSummary = `사유: ${trimmedReason.length > 0 ? trimmedReason : '이유없음'}`;
+          const reasonSummary = `Reason: ${trimmedReason.length > 0 ? trimmedReason : 'none'}`;
 
-          await this.editMessage(permissionChannelId, messageId, `${baseMessage}\n\n❌ 거부됨\n${reasonSummary}`);
+          await this.editMessage(permissionChannelId, messageId, `${baseMessage}\n\n❌ Rejected\n${reasonSummary}`);
           await this.clearReactionsBestEffort(permissionChannelId, messageId);
 
           return {
@@ -285,7 +302,7 @@ export class DiscordProvider implements MessagingProvider {
         console.error('Error checking reactions:', error);
       }
 
-      // 타임아웃 확인
+      // Check for timeout
       if (Date.now() - startTime >= timeoutMs) {
         await this.markRequestExpired(permissionChannelId, messageId, originalMessage, context?.requestId);
         throw new Error('Timeout waiting for permission response');
@@ -296,7 +313,7 @@ export class DiscordProvider implements MessagingProvider {
   }
 
   /**
-   * 거부 사유 입력 또는 생략을 대기합니다.
+   * Waits for rejection reason input or skip.
    */
   private async waitForRejectReason(
     afterMessageId: string,
@@ -342,7 +359,7 @@ export class DiscordProvider implements MessagingProvider {
   }
 
   /**
-   * 만료 상태로 메시지를 갱신합니다.
+   * Updates the message to expired state.
    */
   private async markRequestExpired(
     channelId: string,
@@ -350,12 +367,12 @@ export class DiscordProvider implements MessagingProvider {
     originalMessage: string,
     requestId?: string
   ): Promise<void> {
-    const expiredContent = `${originalMessage}\n\n⏱️ 만료됨\n${this.buildExpiredNotice(requestId)}`;
+    const expiredContent = `${originalMessage}\n\n⏱️ Expired\n${this.buildExpiredNotice(requestId)}`;
     await this.editMessage(channelId, messageId, expiredContent);
   }
 
   /**
-   * 메시지를 수정합니다.
+   * Edits a message.
    */
   private async editMessage(channelId: string, messageId: string, content: string): Promise<void> {
     const response = await fetch(`${this.baseUrl}/channels/${channelId}/messages/${messageId}`, {
@@ -374,9 +391,9 @@ export class DiscordProvider implements MessagingProvider {
   }
 
   /**
-   * 권한 요청 메시지의 리액션을 제거합니다.
+   * Clears reactions from the permission request message.
    *
-   * Discord 권한(Manage Messages)이 없으면 실패할 수 있으므로 best-effort로 처리합니다.
+   * May fail without Discord permission (Manage Messages), so handled as best-effort.
    */
   private async clearReactionsBestEffort(channelId: string, messageId: string): Promise<void> {
     try {
@@ -398,7 +415,7 @@ export class DiscordProvider implements MessagingProvider {
   }
 
   /**
-   * 특정 메시지 이후의 메시지들을 가져옵니다.
+   * Fetches messages after a specific message.
    */
   private async getMessagesAfter(afterMessageId: string, channelId: string): Promise<DiscordMessage[]> {
     const params = new URLSearchParams({
@@ -406,14 +423,11 @@ export class DiscordProvider implements MessagingProvider {
       limit: '10',
     });
 
-    const response = await fetch(
-      `${this.baseUrl}/channels/${channelId}/messages?${params}`,
-      {
-        headers: {
-          'Authorization': `Bot ${this.config.botToken}`,
-        },
-      }
-    );
+    const response = await fetch(`${this.baseUrl}/channels/${channelId}/messages?${params}`, {
+      headers: {
+        'Authorization': `Bot ${this.config.botToken}`,
+      },
+    });
 
     if (!response.ok) {
       return [];
@@ -421,13 +435,13 @@ export class DiscordProvider implements MessagingProvider {
 
     const messages = (await response.json()) as DiscordMessage[];
 
-    // 봇 메시지 제외
+    // Exclude bot messages
     const botId = await this.getBotUserId();
     return messages.filter((m) => m.author.id !== botId && !m.author.bot);
   }
 
   /**
-   * 권한 요청에 사용할 채널 ID를 결정합니다.
+   * Determines the channel ID to use for permission requests.
    */
   private async resolvePermissionChannelId(): Promise<string> {
     if (this.permissionChannelId) {
@@ -449,7 +463,7 @@ export class DiscordProvider implements MessagingProvider {
   }
 
   /**
-   * 사용자 DM 채널을 생성하거나 조회합니다.
+   * Creates or retrieves a user DM channel.
    */
   private async getOrCreateDmChannelId(recipientId: string): Promise<string> {
     const cachedChannelId = this.dmChannelIds.get(recipientId);
@@ -477,7 +491,7 @@ export class DiscordProvider implements MessagingProvider {
   }
 
   /**
-   * 메시지에 반응을 추가합니다.
+   * Adds a reaction to a message.
    */
   private async addReaction(messageId: string, emoji: string): Promise<void> {
     const targetChannelId = this.permissionChannelId || this.config.chatId;
@@ -500,7 +514,7 @@ export class DiscordProvider implements MessagingProvider {
   }
 
   /**
-   * 특정 반응을 누른 사용자 목록을 가져옵니다.
+   * Fetches the list of users who reacted with a specific emoji.
    */
   private async getReactionUsers(messageId: string, emoji: string): Promise<DiscordUser[]> {
     const targetChannelId = this.permissionChannelId || this.config.chatId;
@@ -515,7 +529,7 @@ export class DiscordProvider implements MessagingProvider {
     );
 
     if (!response.ok) {
-      // 아직 반응이 없으면 빈 배열 반환
+      // Return empty array if no reactions yet
       if (response.status === 404) {
         return [];
       }
@@ -527,7 +541,7 @@ export class DiscordProvider implements MessagingProvider {
   }
 
   /**
-   * 봇 정보를 조회합니다.
+   * Retrieves bot information.
    */
   async getInfo(): Promise<{ name: string; identifier: string }> {
     const response = await fetch(`${this.baseUrl}/users/@me`, {
@@ -543,9 +557,7 @@ export class DiscordProvider implements MessagingProvider {
 
     const user = (await response.json()) as DiscordUser;
     const username =
-      user.discriminator !== '0'
-        ? `${user.username}#${user.discriminator}`
-        : user.username;
+      user.discriminator !== '0' ? `${user.username}#${user.discriminator}` : user.username;
 
     return {
       name: `Discord (${username})`,
@@ -554,7 +566,7 @@ export class DiscordProvider implements MessagingProvider {
   }
 
   /**
-   * 최근 메시지를 가져옵니다.
+   * Fetches recent messages.
    */
   private async getRecentMessages(after?: string | null): Promise<DiscordMessage[]> {
     const params = new URLSearchParams({
@@ -565,14 +577,11 @@ export class DiscordProvider implements MessagingProvider {
       params.set('after', after);
     }
 
-    const response = await fetch(
-      `${this.baseUrl}/channels/${this.config.chatId}/messages?${params}`,
-      {
-        headers: {
-          'Authorization': `Bot ${this.config.botToken}`,
-        },
-      }
-    );
+    const response = await fetch(`${this.baseUrl}/channels/${this.config.chatId}/messages?${params}`, {
+      headers: {
+        'Authorization': `Bot ${this.config.botToken}`,
+      },
+    });
 
     if (!response.ok) {
       const error = await response.text();
@@ -581,7 +590,7 @@ export class DiscordProvider implements MessagingProvider {
 
     const messages = (await response.json()) as DiscordMessage[];
 
-    // 봇 본인의 메시지는 제외
+    // Exclude the bot's own messages
     const botInfo = await this.getBotUserId();
     return messages.filter((m) => m.author.id !== botInfo && !m.author.bot);
   }
@@ -589,7 +598,7 @@ export class DiscordProvider implements MessagingProvider {
   private botUserId: string | null = null;
 
   /**
-   * 봇 사용자 ID를 조회합니다.
+   * Retrieves the bot user ID.
    */
   private async getBotUserId(): Promise<string> {
     if (this.botUserId) {
