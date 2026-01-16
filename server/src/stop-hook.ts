@@ -2,8 +2,8 @@
 /**
  * Claude Code Stop Hook
  * 
- * Claude가 작업을 멈출 때 텔레그램/디스코드로 작업 요약을 알림 보내고
- * 사용자의 다음 지시를 받아서 Claude가 계속 작업하도록 합니다.
+ * When Claude stops working, sends a summary notification via Telegram/Discord
+ * and waits for the user's next instruction to continue working.
  */
 
 import { TelegramProvider } from './providers/telegram.js';
@@ -15,7 +15,7 @@ import * as path from 'path';
 
 interface StopHookInput {
   session_id: string;
-  transcript_path: string;  // JSONL 파일 경로
+  transcript_path: string;  // JSONL file path
   cwd: string;
   permission_mode: string;
   hook_event_name: string;
@@ -38,21 +38,21 @@ interface TranscriptEntry {
 }
 
 /**
- * Exit code 2 + stderr JSON 방식의 Stop hook 출력
+ * Stop hook output using exit code 2 + stderr JSON format
  *
- * Claude Code는 exit code 2를 받으면 stderr의 JSON을 파싱하여
- * reason 필드를 새로운 사용자 메시지로 처리합니다.
+ * Claude Code parses the JSON from stderr when it receives exit code 2
+ * and treats the reason field as a new user message.
  *
- * ⚠️ 알려진 버그 (2025년 1월 기준):
- * Plugin으로 설치된 Stop hook은 exit code 2가 제대로 작동하지 않습니다.
+ * ⚠️ Known bug (as of January 2025):
+ * Stop hooks installed as plugins don't work properly with exit code 2.
  * - GitHub Issue #10412: https://github.com/anthropics/claude-code/issues/10412
  * - GitHub Issue #10875: https://github.com/anthropics/claude-code/issues/10875
  *
  * Workaround:
- * 1. ~/.claude/hooks/에 직접 설치하거나
- * 2. ~/.claude/settings.json에 inline hook으로 정의
+ * 1. Install directly in ~/.claude/hooks/
+ * 2. Define as inline hook in ~/.claude/settings.json
  *
- * 예시 (settings.json):
+ * Example (settings.json):
  * {
  *   "hooks": {
  *     "Stop": [{
@@ -75,7 +75,7 @@ interface StopHookOutput {
 }
 
 /**
- * 키워드 목록 환경 변수를 파싱합니다.
+ * Parses keyword list from environment variable.
  */
 function parseKeywordList(rawValue: string | undefined, fallback: string[]): string[] {
   if (!rawValue) {
@@ -91,7 +91,7 @@ function parseKeywordList(rawValue: string | undefined, fallback: string[]): str
 }
 
 /**
- * 숫자형 환경 변수를 파싱합니다.
+ * Parses numeric environment variable.
  */
 function parseNumberEnv(rawValue: string | undefined, fallback: number): number {
   const parsed = parseInt(rawValue || '', 10);
@@ -99,7 +99,7 @@ function parseNumberEnv(rawValue: string | undefined, fallback: number): number 
 }
 
 /**
- * 거부 사유 로그 경로를 정규화합니다.
+ * Normalizes the rejection reason log path.
  */
 function resolveRejectLogPath(rawPath: string | undefined): string {
   const defaultPath = path.join(os.homedir(), '.claude', 'dm-plz', 'rejections.jsonl');
@@ -114,7 +114,7 @@ function resolveRejectLogPath(rawPath: string | undefined): string {
 }
 
 /**
- * 환경 변수에서 설정을 로드합니다.
+ * Loads configuration from environment variables.
  */
 function loadConfig(): ServerConfig {
   const rawProvider = process.env.DMPLZ_PROVIDER;
@@ -180,7 +180,7 @@ function loadConfig(): ServerConfig {
 }
 
 /**
- * 프로바이더를 생성합니다.
+ * Creates a messaging provider.
  */
 function createProvider(config: ServerConfig): MessagingProvider {
   if (config.provider === 'telegram') {
@@ -191,7 +191,7 @@ function createProvider(config: ServerConfig): MessagingProvider {
 }
 
 /**
- * stdin에서 JSON 입력을 읽고 파싱합니다.
+ * Reads and parses JSON input from stdin.
  */
 async function readStdin(): Promise<StopHookInput | null> {
   try {
@@ -204,7 +204,7 @@ async function readStdin(): Promise<StopHookInput | null> {
       return JSON.parse(input) as StopHookInput;
     }
   } catch (e) {
-    // 파싱 실패 시 null 반환
+    // Return null on parse failure
   }
   return null;
 }
@@ -218,7 +218,7 @@ interface RejectLogEntry {
 }
 
 /**
- * 거부 로그(JSONL) 한 줄을 파싱합니다.
+ * Parses a single line of rejection log (JSONL).
  */
 function parseRejectLogLine(line: string): RejectLogEntry | null {
   try {
@@ -229,7 +229,7 @@ function parseRejectLogLine(line: string): RejectLogEntry | null {
 }
 
 /**
- * 사용자에게 표시할 거부 사유 문자열을 정리합니다.
+ * Formats the rejection reason string for display to user.
  */
 function formatRejectReason(reason: string | undefined): string {
   const trimmed = (reason || '').trim();
@@ -237,7 +237,7 @@ function formatRejectReason(reason: string | undefined): string {
 }
 
 /**
- * 최근에 발생한 거부(deny) 로그가 있으면 반환합니다.
+ * Returns recent rejection (deny) log entry if exists.
  */
 function findRecentRejection(options: {
   logPath: string;
@@ -271,7 +271,7 @@ function findRecentRejection(options: {
       }
 
       if (timestampMs < cutoff) {
-        // 최신부터 역순 탐색 중이므로, 이보다 더 오래된 로그는 볼 필요가 없습니다.
+        // Traversing in reverse from newest, no need to check older logs.
         break;
       }
 
@@ -282,14 +282,14 @@ function findRecentRejection(options: {
       return entry;
     }
   } catch {
-    // 로그 파싱 실패 시 무시
+    // Ignore log parsing failures
   }
 
   return null;
 }
 
 /**
- * Transcript 파일을 읽고 최근 작업 내용을 추출합니다.
+ * Reads transcript file and extracts recent work summary.
  */
 function extractRecentWork(transcriptPath: string, maxLines: number = 50): string {
   try {
@@ -300,7 +300,7 @@ function extractRecentWork(transcriptPath: string, maxLines: number = 50): strin
     const content = readFileSync(transcriptPath, 'utf-8');
     const lines = content.trim().split('\n').filter(line => line.trim());
     
-    // 최근 항목들만 가져옴
+    // Get only recent entries
     const recentLines = lines.slice(-maxLines);
     
     const workSummary: string[] = [];
@@ -312,20 +312,20 @@ function extractRecentWork(transcriptPath: string, maxLines: number = 50): strin
       try {
         const entry = JSON.parse(line) as TranscriptEntry;
         
-        // Assistant 메시지에서 텍스트 추출
+        // Extract text from assistant messages
         if (entry.type === 'assistant' && entry.message?.content) {
           for (const block of entry.message.content) {
             if (block.type === 'text' && block.text) {
               lastAssistantMessage = block.text;
             }
-            // Tool use 정보
+            // Tool use information
             if (block.type === 'tool_use' && block.name) {
               toolsUsed.add(block.name);
-              // 파일 관련 tool이면 파일 경로 추출
+              // Extract file path for file-related tools
               if (block.input && (block.name === 'Write' || block.name === 'Edit' || block.name === 'Read')) {
                 const filePath = block.input.file_path || block.input.filePath;
                 if (typeof filePath === 'string') {
-                  // 경로에서 파일명만 추출
+                  // Extract only filename from path
                   const fileName = filePath.split(/[/\\]/).pop() || filePath;
                   filesModified.add(fileName);
                 }
@@ -334,11 +334,11 @@ function extractRecentWork(transcriptPath: string, maxLines: number = 50): strin
           }
         }
       } catch {
-        // JSON 파싱 실패 무시
+        // Ignore JSON parse failures
       }
     }
 
-    // 요약 생성
+    // Generate summary
     if (toolsUsed.size > 0) {
       workSummary.push(`🔧 Tools used: ${Array.from(toolsUsed).slice(0, 5).join(', ')}`);
     }
@@ -347,7 +347,7 @@ function extractRecentWork(transcriptPath: string, maxLines: number = 50): strin
       workSummary.push(`📁 Files touched: ${Array.from(filesModified).slice(0, 5).join(', ')}`);
     }
 
-    // 마지막 Assistant 메시지 (200자로 제한)
+    // Last assistant message (limited to 200 chars)
     if (lastAssistantMessage) {
       const truncated = lastAssistantMessage.length > 200 
         ? lastAssistantMessage.substring(0, 200) + '...'
@@ -357,13 +357,13 @@ function extractRecentWork(transcriptPath: string, maxLines: number = 50): strin
 
     return workSummary.join('\n');
   } catch (e) {
-    // 파일 읽기 실패 시 빈 문자열 반환
+    // Return empty string on file read failure
     return '';
   }
 }
 
 /**
- * 빠른 응답 버튼 텍스트 목록
+ * Quick reply button text list
  */
 const QUICK_REPLY_BUTTONS = [
   '👍 Continue',
@@ -372,7 +372,7 @@ const QUICK_REPLY_BUTTONS = [
 ];
 
 /**
- * LGTM 버튼인지 확인합니다 (인터럽트 트리거).
+ * Checks if the reply is the LGTM button (interrupt trigger).
  */
 function isLgtmButton(reply: string): boolean {
   const normalized = reply.trim().toLowerCase();
@@ -380,7 +380,7 @@ function isLgtmButton(reply: string): boolean {
 }
 
 /**
- * 알림 메시지를 생성합니다.
+ * Builds the notification message.
  */
 function buildNotificationMessage(input: StopHookInput | null, recentRejection: RejectLogEntry | null): string {
   let message = recentRejection
@@ -393,7 +393,7 @@ function buildNotificationMessage(input: StopHookInput | null, recentRejection: 
     message += `*Tool:* \`${toolName}\`\n*Reason:* ${reason}\n\n`;
   }
 
-  // Transcript에서 작업 내용 추출
+  // Extract work summary from transcript
   if (input?.transcript_path) {
     const workSummary = extractRecentWork(input.transcript_path);
     if (workSummary) {
@@ -407,7 +407,7 @@ function buildNotificationMessage(input: StopHookInput | null, recentRejection: 
 }
 
 /**
- * 거부 사유를 포함해 continuation 메시지를 구성합니다.
+ * Builds the continuation message including rejection reason.
  */
 function buildContinuationReason(reply: string, recentRejection: RejectLogEntry | null): string {
   const trimmedReply = reply.trim();
@@ -427,14 +427,14 @@ function buildContinuationReason(reply: string, recentRejection: RejectLogEntry 
 }
 
 /**
- * Stop 훅 처리 흐름을 실행합니다.
+ * Executes the Stop hook processing flow.
  */
 async function main() {
   try {
-    // stdin 입력 읽기 및 파싱
+    // Read and parse stdin input
     const input = await readStdin();
 
-    // 설정 로드 및 프로바이더 준비
+    // Load config and prepare provider
     const config = loadConfig();
     const provider = createProvider(config);
 
@@ -444,27 +444,27 @@ async function main() {
       withinMs: 2 * 60 * 1000,
     });
     
-    // 봇 정보 초기화
+    // Initialize bot info
     await provider.getInfo();
 
-    // 알림 메시지 생성 및 키보드 버튼과 함께 전송
+    // Build notification message and send with keyboard buttons
     const message = buildNotificationMessage(input, recentRejection);
     await provider.sendMessageWithKeyboard(message, QUICK_REPLY_BUTTONS, 'Markdown');
 
-    // 사용자 응답 대기 (버튼 탭 또는 직접 입력)
+    // Wait for user response (button tap or direct input)
     const reply = await provider.waitForReply(config.questionTimeoutMs);
 
-    // 응답이 있으면 처리
+    // Process response if received
     if (reply) {
-      // LGTM (Stop) 버튼 체크 - 인터럽트 처리
+      // Check LGTM (Stop) button - interrupt handling
       if (isLgtmButton(reply)) {
-        // 인터럽트 경고 메시지 전송
+        // Send interrupt warning message
         await provider.sendMessage('⚠️ *Stopping work.* Claude will not continue.\n\n✅ Work has been reviewed and approved.', 'Markdown');
-        // exit code 0 = Claude 멈춤 (인터럽트)
+        // exit code 0 = Claude stops (interrupt)
         process.exit(0);
       }
 
-      // 그 외 응답은 continuation 요청
+      // Other responses request continuation
       const continuationReason = buildContinuationReason(reply, recentRejection);
       const output: StopHookOutput = {
         continue: true,
@@ -473,19 +473,19 @@ async function main() {
         decision: 'block',
         reason: continuationReason,
       };
-      // stderr로 JSON 출력 (Claude Code가 이를 파싱)
+      // Output JSON to stderr (Claude Code parses this)
       console.error(JSON.stringify(output));
-      // exit code 2 = continuation 요청
+      // exit code 2 = continuation request
       process.exit(2);
     } else {
-      // 응답 없음 - 그냥 종료
+      // No response - just exit
       process.exit(0);
     }
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error(`Stop hook error/timeout: ${errorMessage}`);
-    // 에러 시 그냥 종료 (Claude 멈춤)
+    // On error, just exit (Claude stops)
     process.exit(0);
   }
 }

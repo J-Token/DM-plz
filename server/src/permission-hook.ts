@@ -2,8 +2,8 @@
 /**
  * Claude Code Permission Request Hook
  *
- * Claude Code의 권한 요청을 텔레그램/디스코드로 라우팅합니다.
- * stdin으로 권한 요청 정보를 받아서 승인/거부 결과를 JSON으로 출력합니다.
+ * Routes Claude Code permission requests to Telegram/Discord.
+ * Receives permission request info via stdin and outputs approval/rejection result as JSON.
  */
 
 import { TelegramProvider } from './providers/telegram.js';
@@ -29,21 +29,21 @@ interface PermissionRequestInput {
 }
 
 /**
- * 세션 ID를 가져옵니다. 여러 소스에서 확인합니다.
+ * Gets the session ID. Checks multiple sources.
  */
 function getSessionId(input: PermissionRequestInput): string {
-  // 1. 입력에서 session_id 확인
+  // 1. Check session_id from input
   if (input.session_id) {
     return input.session_id;
   }
 
-  // 2. 환경 변수 확인
+  // 2. Check environment variable
   if (process.env.CLAUDE_SESSION_ID) {
     return process.env.CLAUDE_SESSION_ID;
   }
 
-  // 3. cwd 기반으로 일관된 세션 ID 생성
-  // (tool_use_id 유무와 관계없이 같은 cwd면 같은 세션으로 취급)
+  // 3. Generate consistent session ID based on cwd
+  // (same cwd = same session, regardless of tool_use_id presence)
   return `session-${input.cwd}`;
 }
 
@@ -54,7 +54,7 @@ interface SessionCache {
 }
 
 /**
- * 권한 거부 후 연쇄 차단 시간을 정의합니다.
+ * Defines the cascade blocking time after permission rejection.
  */
 const REJECT_CASCADE_WINDOW_MS = 5 * 1000;
 
@@ -80,7 +80,7 @@ interface PermissionHookOutput {
 }
 
 /**
- * 키워드 목록 환경 변수를 파싱합니다.
+ * Parses keyword list from environment variable.
  */
 function parseKeywordList(rawValue: string | undefined, fallback: string[]): string[] {
   if (!rawValue) {
@@ -96,7 +96,7 @@ function parseKeywordList(rawValue: string | undefined, fallback: string[]): str
 }
 
 /**
- * 숫자형 환경 변수를 파싱합니다.
+ * Parses numeric environment variable.
  */
 function parseNumberEnv(rawValue: string | undefined, fallback: number): number {
   const parsed = parseInt(rawValue || '', 10);
@@ -104,7 +104,7 @@ function parseNumberEnv(rawValue: string | undefined, fallback: number): number 
 }
 
 /**
- * 거부 사유 로그 경로를 정규화합니다.
+ * Normalizes the rejection reason log path.
  */
 function resolveRejectLogPath(rawPath: string | undefined): string {
   const defaultPath = path.join(os.homedir(), '.claude', 'dm-plz', 'rejections.jsonl');
@@ -119,13 +119,13 @@ function resolveRejectLogPath(rawPath: string | undefined): string {
 }
 
 /**
- * 환경 변수에서 설정을 로드합니다.
+ * Loads configuration from environment variables.
  */
 function loadConfig(): ServerConfig {
-  // DMPLZ_PROVIDER가 잘못 설정된 경우를 대비해 값 검증 후 기본값을 사용합니다.
+  // Validate value and use default in case DMPLZ_PROVIDER is misconfigured.
   const rawProvider = process.env.DMPLZ_PROVIDER;
   const provider: 'telegram' | 'discord' = rawProvider === 'discord' ? 'discord' : 'telegram';
-  const questionTimeoutMs = parseNumberEnv(process.env.DMPLZ_QUESTION_TIMEOUT_MS, 180000); // 기본 3분
+  const questionTimeoutMs = parseNumberEnv(process.env.DMPLZ_QUESTION_TIMEOUT_MS, 180000); // default 3 minutes
   const rejectReasonTimeoutMs = parseNumberEnv(process.env.DMPLZ_REJECT_REASON_TIMEOUT_MS, 600000);
   const rejectReasonMaxChars = parseNumberEnv(process.env.DMPLZ_REJECT_REASON_MAX_CHARS, 300);
   const rejectReasonLogPath = resolveRejectLogPath(process.env.DMPLZ_REJECT_REASON_LOG_PATH);
@@ -187,7 +187,7 @@ function loadConfig(): ServerConfig {
 
 
 /**
- * 프로바이더를 생성합니다.
+ * Creates a messaging provider.
  */
 function createProvider(config: ServerConfig): MessagingProvider {
   if (config.provider === 'telegram') {
@@ -198,7 +198,7 @@ function createProvider(config: ServerConfig): MessagingProvider {
 }
 
 /**
- * 권한 요청 ID를 생성합니다.
+ * Generates a permission request ID.
  */
 function getRequestId(input: PermissionRequestInput): string {
   if (input.tool_use_id) {
@@ -210,7 +210,7 @@ function getRequestId(input: PermissionRequestInput): string {
 }
 
 /**
- * 사용자 락 키를 생성합니다.
+ * Generates a user lock key.
  */
 function createUserLockKey(config: ServerConfig): string {
   const baseId = config.permissionChatId || config.chatId;
@@ -219,7 +219,7 @@ function createUserLockKey(config: ServerConfig): string {
 }
 
 /**
- * 사용자 락 경로를 생성합니다.
+ * Generates a user lock path.
  */
 function getUserLockPath(lockKey: string): string {
   const safeKey = lockKey.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -227,7 +227,7 @@ function getUserLockPath(lockKey: string): string {
 }
 
 /**
- * 사용자 락을 획득합니다.
+ * Acquires a user lock.
  */
 async function acquireUserLock(lockKey: string, timeoutMs: number): Promise<() => void> {
   const lockPath = getUserLockPath(lockKey);
@@ -240,7 +240,7 @@ async function acquireUserLock(lockKey: string, timeoutMs: number): Promise<() =
         try {
           fs.unlinkSync(lockPath);
         } catch {
-          // 락 해제 실패는 무시
+          // Ignore lock release failure
         }
       };
     } catch (error) {
@@ -255,7 +255,7 @@ async function acquireUserLock(lockKey: string, timeoutMs: number): Promise<() =
           fs.unlinkSync(lockPath);
         }
       } catch {
-        // 락 상태 확인 실패 시 재시도
+        // Retry on lock status check failure
       }
 
       await new Promise((resolve) => setTimeout(resolve, 200));
@@ -266,7 +266,7 @@ async function acquireUserLock(lockKey: string, timeoutMs: number): Promise<() =
 }
 
 /**
- * 연쇄 거부 상태 파일 경로를 생성합니다.
+ * Generates the cascade rejection state file path.
  */
 function getCascadeStatePath(lockKey: string): string {
   const safeKey = lockKey.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -274,7 +274,7 @@ function getCascadeStatePath(lockKey: string): string {
 }
 
 /**
- * 연쇄 거부 상태를 읽어옵니다.
+ * Reads the cascade rejection state.
  */
 function readCascadeState(lockKey: string, windowMs: number): RejectCascadeState | null {
   const statePath = getCascadeStatePath(lockKey);
@@ -304,7 +304,7 @@ function readCascadeState(lockKey: string, windowMs: number): RejectCascadeState
 }
 
 /**
- * 연쇄 거부 상태를 저장합니다.
+ * Saves the cascade rejection state.
  */
 function writeCascadeState(lockKey: string, state: RejectCascadeState): void {
   const statePath = getCascadeStatePath(lockKey);
@@ -312,7 +312,7 @@ function writeCascadeState(lockKey: string, state: RejectCascadeState): void {
 }
 
 /**
- * 연쇄 거부 상태를 제거합니다.
+ * Removes the cascade rejection state.
  */
 function clearCascadeState(lockKey: string): void {
   const statePath = getCascadeStatePath(lockKey);
@@ -324,12 +324,12 @@ function clearCascadeState(lockKey: string): void {
   try {
     fs.unlinkSync(statePath);
   } catch {
-    // 삭제 실패는 무시
+    // Ignore delete failure
   }
 }
 
 /**
- * 거부 사유를 정규화합니다.
+ * Normalizes the rejection reason.
  */
 function normalizeRejectReason(reason: string, maxChars: number): string {
   const trimmed = reason.trim();
@@ -341,7 +341,7 @@ function normalizeRejectReason(reason: string, maxChars: number): string {
 }
 
 /**
- * 최종 거부 사유 출처를 결정합니다.
+ * Determines the final rejection reason source.
  */
 function resolveReasonSource(reason: string, reasonSource: RejectReasonSource): RejectReasonSource {
   if (reasonSource === 'timeout') {
@@ -356,7 +356,7 @@ function resolveReasonSource(reason: string, reasonSource: RejectReasonSource): 
 }
 
 /**
- * Claude Code에 전달할 거부 메시지를 생성합니다.
+ * Builds the rejection message to pass to Claude Code.
  */
 function buildDenyMessage(reason: string, reasonSource: RejectReasonSource): string {
   if (reasonSource === 'timeout') {
@@ -371,7 +371,7 @@ function buildDenyMessage(reason: string, reasonSource: RejectReasonSource): str
 }
 
 /**
- * 거부 사유를 다음 지시로 전달하기 위한 systemMessage를 생성합니다.
+ * Builds the systemMessage to pass rejection reason as next instruction.
  */
 function buildRejectionSystemMessage(reason: string, reasonSource: RejectReasonSource): string {
   const trimmedReason = reason.trim();
@@ -393,7 +393,7 @@ function buildRejectionSystemMessage(reason: string, reasonSource: RejectReasonS
 }
 
 /**
- * 거부 로그 디렉토리를 준비합니다.
+ * Prepares the rejection log directory.
  */
 function ensureRejectLogDirectory(logPath: string): void {
   const dirPath = path.dirname(logPath);
@@ -401,7 +401,7 @@ function ensureRejectLogDirectory(logPath: string): void {
 }
 
 /**
- * 거부 로그 로테이션을 수행합니다.
+ * Performs rejection log rotation.
  */
 function rotateRejectLogIfNeeded(logPath: string, rotateBytes: number, maxFiles: number): void {
   if (!fs.existsSync(logPath)) {
@@ -435,7 +435,7 @@ function rotateRejectLogIfNeeded(logPath: string, rotateBytes: number, maxFiles:
 }
 
 /**
- * 로그 파일 락을 실행합니다.
+ * Executes the log file lock.
  */
 async function withLogLock(logPath: string, action: () => void): Promise<void> {
   const lockPath = `${logPath}.lock`;
@@ -451,7 +451,7 @@ async function withLogLock(logPath: string, action: () => void): Promise<void> {
         try {
           fs.unlinkSync(lockPath);
         } catch {
-          // 락 해제 실패는 무시
+          // Ignore lock release failure
         }
       }
       return;
@@ -468,7 +468,7 @@ async function withLogLock(logPath: string, action: () => void): Promise<void> {
 }
 
 /**
- * 민감 정보 패턴을 마스킹합니다.
+ * Masks sensitive information patterns.
  */
 function maskSensitiveText(reason: string): string {
   const keyValuePattern = /(api[_-]?key|token|password|secret|access[_-]?key|authorization)\s*[:=]\s*([^\s,]+)/gi;
@@ -483,7 +483,7 @@ function maskSensitiveText(reason: string): string {
 }
 
 /**
- * 토큰 문자열을 부분 마스킹합니다.
+ * Partially masks token strings.
  */
 function maskToken(token: string): string {
   if (token.length <= 8) {
@@ -494,7 +494,7 @@ function maskToken(token: string): string {
 }
 
 /**
- * 거부 로그 한 줄을 생성합니다.
+ * Generates a single rejection log line.
  */
 function buildRejectLogLine(options: {
   provider: ServerConfig['provider'];
@@ -520,7 +520,7 @@ function buildRejectLogLine(options: {
 }
 
 /**
- * 거부 로그를 기록합니다.
+ * Writes a rejection log entry.
  */
 async function appendRejectLog(
   config: ServerConfig,
@@ -550,7 +550,7 @@ async function appendRejectLog(
 }
 
 /**
- * 세션 캐시 파일 경로를 반환합니다.
+ * Returns the session cache file path.
  */
 function getSessionCachePath(sessionId: string): string {
 
@@ -559,7 +559,7 @@ function getSessionCachePath(sessionId: string): string {
 }
 
 /**
- * 세션 캐시를 로드합니다.
+ * Loads the session cache.
  */
 function loadSessionCache(sessionId: string): SessionCache | null {
   try {
@@ -567,19 +567,19 @@ function loadSessionCache(sessionId: string): SessionCache | null {
     if (fs.existsSync(cachePath)) {
       const data = fs.readFileSync(cachePath, 'utf-8');
       const cache = JSON.parse(data) as SessionCache;
-      // 24시간 이내의 캐시만 유효
+      // Only cache within 24 hours is valid
       if (Date.now() - cache.createdAt < 24 * 60 * 60 * 1000) {
         return cache;
       }
     }
   } catch {
-    // 캐시 로드 실패 시 무시
+    // Ignore cache load failure
   }
   return null;
 }
 
 /**
- * 세션 캐시를 저장합니다.
+ * Saves the session cache.
  */
 function saveSessionCache(sessionId: string, toolName: string): void {
   try {
@@ -600,12 +600,12 @@ function saveSessionCache(sessionId: string, toolName: string): void {
 
     fs.writeFileSync(cachePath, JSON.stringify(cache, null, 2));
   } catch {
-    // 캐시 저장 실패 시 무시
+    // Ignore cache save failure
   }
 }
 
 /**
- * 도구가 세션에서 이미 허용되었는지 확인합니다.
+ * Checks if the tool is already allowed in the session.
  */
 function isToolAllowedInSession(sessionId: string, toolName: string): boolean {
   const cache = loadSessionCache(sessionId);
@@ -613,7 +613,7 @@ function isToolAllowedInSession(sessionId: string, toolName: string): boolean {
 }
 
 /**
- * 도구 입력을 사람이 읽기 쉬운 형태로 포맷합니다.
+ * Formats tool input into human-readable form.
  */
 function formatToolInput(toolName: string, toolInput: Record<string, unknown>): string {
   switch (toolName) {
@@ -638,15 +638,15 @@ function formatToolInput(toolName: string, toolInput: Record<string, unknown>): 
 }
 
 /**
- * 도구 사용 이유/설명을 추출합니다.
+ * Extracts tool use reason/description.
  */
 function getToolDescription(toolName: string, toolInput: Record<string, unknown>): string {
-  // description 필드가 있으면 사용
+  // Use description field if present
   if (toolInput.description && typeof toolInput.description === 'string') {
     return toolInput.description;
   }
 
-  // 도구별 기본 설명
+  // Default description per tool
   switch (toolName) {
     case 'Bash':
       return 'Run a terminal command';
@@ -682,7 +682,7 @@ function getToolDescription(toolName: string, toolInput: Record<string, unknown>
 }
 
 /**
- * 권한 요청 메시지를 생성합니다.
+ * Builds the permission request message.
  */
 function createPermissionMessage(input: PermissionRequestInput): string {
   const toolDescription = formatToolInput(input.tool_name, input.tool_input);
@@ -701,7 +701,7 @@ function createPermissionMessage(input: PermissionRequestInput): string {
 }
 
 /**
- * stdin에서 JSON 입력을 읽습니다.
+ * Reads JSON input from stdin.
  */
 async function readStdin(): Promise<string> {
   const chunks: string[] = [];
@@ -714,7 +714,7 @@ async function readStdin(): Promise<string> {
 }
 
 /**
- * 결과를 JSON으로 출력합니다.
+ * Outputs result as JSON.
  */
 function outputResult(
   approved: boolean,
@@ -742,46 +742,46 @@ function outputResult(
 
 
 /**
- * 메인 함수
+ * Main function
  */
 async function main(): Promise<void> {
   try {
-    // stdin에서 입력 읽기
+    // Read input from stdin
     const inputText = await readStdin();
     const input = JSON.parse(inputText) as PermissionRequestInput;
 
-    // AskUserQuestion은 PreToolUse 훅에서 처리하므로 자동 승인
+    // Auto-approve AskUserQuestion as it's handled by PreToolUse hook
     if (input.tool_name === 'AskUserQuestion') {
       outputResult(true);
       return;
     }
 
-    // 세션 ID 결정
+    // Determine session ID
     const sessionId = getSessionId(input);
     console.error(`[dmplz] Session ID: ${sessionId}, Tool: ${input.tool_name}`);
 
-    // 세션 캐시 확인 - 이미 허용된 도구인지
+    // Check session cache - if tool is already allowed
     if (isToolAllowedInSession(sessionId, input.tool_name)) {
-      // 이미 세션에서 허용된 도구는 자동 승인
+      // Auto-approve tools already allowed in session
       console.error(`[dmplz] Tool "${input.tool_name}" auto-approved (session cache)`);
       outputResult(true);
       return;
     }
 
-    // 권한 요청 ID 생성
+    // Generate permission request ID
     const requestId = getRequestId(input);
 
-    // 설정 로드 및 프로바이더 생성
+    // Load config and create provider
     const config = loadConfig();
     const provider = createProvider(config);
 
-    // 봇 정보 조회 (멘션 감지 등을 위해)
+    // Get bot info (for mention detection, etc.)
     await provider.getInfo();
 
-    // 권한 요청 메시지 생성
+    // Build permission request message
     const message = createPermissionMessage(input);
 
-    // 사용자 락 획득 후 권한 요청 처리
+    // Process permission request after acquiring user lock
     const lockKey = createUserLockKey(config);
     const lockStartTime = Date.now();
     const releaseLock = await acquireUserLock(lockKey, config.questionTimeoutMs);
@@ -807,12 +807,12 @@ async function main(): Promise<void> {
     }
 
 
-    // 응답 처리
+    // Process response
     if (response === 'approve') {
       clearCascadeState(lockKey);
       outputResult(true);
     } else if (response === 'approve_session') {
-      // 세션 캐시에 저장
+      // Save to session cache
       saveSessionCache(sessionId, input.tool_name);
       console.error(`[dmplz] Tool "${input.tool_name}" added to session cache (session: ${sessionId})`);
       clearCascadeState(lockKey);
@@ -828,7 +828,7 @@ async function main(): Promise<void> {
       );
 
       try {
-        // Stop 훅에서 사유를 읽을 수 있도록 로그를 먼저 기록합니다.
+        // Write log first so Stop hook can read the reason.
         await appendRejectLog(
           config,
           requestId,
@@ -842,7 +842,7 @@ async function main(): Promise<void> {
         console.error(`[dmplz] Reject log append failed: ${errorMessage}`);
       }
 
-      // 동일 사용자의 이후 권한 요청은 일정 시간 자동 거부로 처리합니다.
+      // Auto-reject subsequent permission requests from the same user for a period of time.
       writeCascadeState(lockKey, {
         createdAt: Date.now(),
         reason: normalizedReason,
@@ -851,7 +851,7 @@ async function main(): Promise<void> {
         toolName: input.tool_name,
       });
 
-      // 거부 사유를 새로운 지시로 전달하도록 systemMessage를 포함합니다.
+      // Include systemMessage to pass rejection reason as new instruction.
       outputResult(false, denyMessage, undefined, systemMessage);
     } else {
       outputResult(false);
@@ -859,12 +859,12 @@ async function main(): Promise<void> {
 
 
   } catch (error) {
-    // 오류 발생 시에는 Claude 사용 흐름을 막지 않도록 기본 허용합니다.
-    // (설정 누락/네트워크 오류 등으로 전체 워크플로가 멈추는 것을 방지)
+    // On error, default to allow to avoid blocking Claude workflow.
+    // (Prevent entire workflow from stopping due to config issues/network errors)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error(`Permission hook error (fail-open): ${errorMessage}`);
 
-    // 오류가 나더라도 도구 실행은 허용
+    // Allow tool execution even on error
     outputResult(true);
     process.exit(0);
   }
