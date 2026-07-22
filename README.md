@@ -126,6 +126,9 @@ Restart Claude Code. Done!
 | `DMPLZ_DISCORD_DM_USER_ID`       | No (Discord)             | User ID for sending permission requests via DM   |
 | `DMPLZ_PERMISSION_CHAT_ID`       | No                       | Override chat/channel ID for permission requests |
 | `DMPLZ_QUESTION_TIMEOUT_MS`      | No (default: `10800000`) | Timeout for waiting for responses (3 hours)      |
+| `DMPLZ_MEDIA_ENABLED`            | No (default: `true`)     | Expose the local-file attachment tool            |
+| `DMPLZ_MEDIA_MAX_BYTES`          | No                       | Override the provider attachment size limit      |
+| `DMPLZ_MEDIA_TIMEOUT_MS`         | No (default: `120000`)   | Attachment upload timeout                        |
 | `DMPLZ_REJECT_REASON_TIMEOUT_MS` | No (default: `600000`)   | Timeout for entering a rejection reason (10 min) |
 
 Permission requests use `DMPLZ_PERMISSION_CHAT_ID` first if set, otherwise `DMPLZ_DISCORD_DM_USER_ID` (Discord only), and finally the default chat/channel.
@@ -190,6 +193,65 @@ await send_notification({
   parse_mode: "Markdown", // optional
 });
 ```
+
+### `send_media`
+
+Sends a local file as an attachment — screenshots, logs, build artifacts, recordings.
+
+```typescript
+await send_media({
+  file_path: "C:\\work\\bench.png", // absolute paths only
+  caption: "p95 latency comparison", // optional
+});
+```
+
+The destination is fixed to your configured chat/channel. It cannot be overridden through the tool arguments.
+
+Size limits are 50 MB on Telegram and 10 MiB on Discord, adjustable with `DMPLZ_MEDIA_MAX_BYTES`. Over the limit, nothing is uploaded and the error reports the limit. MP4s of 30 seconds or less are sent as looping animations on Telegram.
+
+---
+
+## Screen evidence recording (optional module)
+
+When Claude finishes GUI work and reports "done", a user on their phone has no way to check. Paired with [airec](https://github.com/j-token/airec), DM-Plz can send the recording of that work instead.
+
+**This is a separate install.** DM-Plz itself contains no recording code, and nothing changes if you skip it.
+
+### Install
+
+```powershell
+irm https://raw.githubusercontent.com/j-token/airec/main/install.ps1 | iex
+npx skills add j-token/dm-plz --skill dm-plz-evidence
+```
+
+The first line installs the recorder (Windows 10 2004+ / 11). The second installs the skill that tells Claude when to record and when to send. Both are needed for it to happen automatically.
+
+### Remove
+
+```powershell
+npx skills remove dm-plz-evidence
+```
+
+DM-Plz itself is unaffected.
+
+### How it looks
+
+```
+You (from your phone): "run the installer wizard to the end"
+Claude: (starts recording -> runs the wizard -> stops recording)
+Claude: send_media(...)
+You: (play a 12-second clip, mouse clicks visible on screen)
+```
+
+The caption carries duration, file size, and whether the recording ended cleanly. Recordings that ended unexpectedly — a closed target window, a capture failure — arrive marked with a warning.
+
+### Before you turn this on
+
+- **A recording captures whatever was on screen.** Passwords, tokens, private messages. Nothing is masked automatically.
+- **Telegram and Discord are not end-to-end encrypted.** Files you send stay on their servers even after you delete the local copy.
+- **If `DMPLZ_DISCORD_CHANNEL_ID` points at a team channel, your team sees it.** Use a personal DM for evidence recording.
+- UAC secure desktop and DRM-protected content record as black frames.
+- Windows only for now.
 
 ---
 
