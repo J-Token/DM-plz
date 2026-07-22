@@ -19,8 +19,26 @@ async function main() {
   console.log('🧪 DM-Plz Configuration Test\n');
 
   // Load configuration
-  const provider = (process.env.DMPLZ_PROVIDER || 'telegram') as 'telegram' | 'discord';
+  const telegramConfigured = !!(
+    process.env.DMPLZ_TELEGRAM_BOT_TOKEN && process.env.DMPLZ_TELEGRAM_CHAT_ID
+  );
+  const discordConfigured = !!(
+    process.env.DMPLZ_DISCORD_BOT_TOKEN && process.env.DMPLZ_DISCORD_CHANNEL_ID
+  );
+
+  const defaultProvider = telegramConfigured ? 'telegram' : discordConfigured ? 'discord' : 'telegram';
+  const provider = (process.env.DMPLZ_PROVIDER || defaultProvider) as 'telegram' | 'discord';
   console.log(`Provider: ${provider}`);
+
+  // Skip rather than fail when nothing is configured, so the test is safe to
+  // run in a fresh checkout.
+  if (
+    (provider === 'telegram' && !telegramConfigured) ||
+    (provider === 'discord' && !discordConfigured)
+  ) {
+    console.log('⏭️ Skipped: provider credentials are not set.');
+    return;
+  }
 
   let botToken: string | undefined;
   let chatId: string | undefined;
@@ -63,9 +81,15 @@ async function main() {
 
   const config: ServerConfig = {
     provider,
-    botToken,
-    chatId,
+    botToken: botToken!,
+    chatId: chatId!,
     questionTimeoutMs: 10800000,
+    rejectReasonTimeoutMs: 600000,
+    rejectReasonMaxChars: 300,
+    rejectReasonLogPath: '',
+    rejectReasonLogRotateBytes: 10485760,
+    rejectReasonLogMaxFiles: 10,
+    rejectReasonNoReasonKeywords: ['no_reason'],
   };
 
   console.log(`Chat/Channel ID: ${chatId}\n`);
@@ -95,6 +119,29 @@ async function main() {
     console.error('❌ Failed to send message:', error instanceof Error ? error.message : error);
     process.exit(1);
   }
+
+  // Send test attachment.
+  // Point DMPLZ_TEST_MEDIA_PATH at a real .mp4 to exercise duration-based
+  // routing and inline playback; without it only the document path is covered.
+  const mediaPath = process.env.DMPLZ_TEST_MEDIA_PATH || import.meta.path;
+  const isRealMedia = mediaPath !== import.meta.path;
+
+  console.log('Sending test attachment...');
+  console.log(`   File: ${mediaPath}`);
+  if (!isRealMedia) {
+    console.log('   ⚠️ Falling back to this script. Video routing stays untested.');
+    console.log('   Set DMPLZ_TEST_MEDIA_PATH to an .mp4 to cover it.');
+  }
+
+  const mediaResult = await createProvider(config).sendMedia(mediaPath, {
+    caption: '🧪 DM-Plz media attachment test',
+  });
+
+  if ('error' in mediaResult) {
+    console.error('❌ Failed to send attachment:', JSON.stringify(mediaResult.error));
+    process.exit(1);
+  }
+  console.log(`✅ Attachment sent successfully (message ${mediaResult.messageId})!\n`);
 
   console.log('✨ All tests passed! Your configuration is ready to use.');
   console.log('\nNext steps:');
