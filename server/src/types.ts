@@ -50,7 +50,60 @@ export interface ServerConfig {
    * Discord user ID to send permission requests via DM (optional)
    */
   discordDmUserId?: string;
+  /**
+   * Whether the send_media tool is exposed (default: true)
+   */
+  mediaEnabled?: boolean;
+  /**
+   * Override for the provider's attachment size limit, in bytes
+   */
+  mediaMaxBytes?: number;
+  /**
+   * Timeout for a media upload (in milliseconds)
+   */
+  mediaTimeoutMs?: number;
 }
+
+/**
+ * How a file is presented by the messaging platform
+ */
+export type MediaKind = 'video' | 'animation' | 'document' | 'photo';
+
+/**
+ * Options for a media attachment
+ */
+export interface MediaOptions {
+  /**
+   * Caption shown with the attachment
+   */
+  caption?: string;
+  /**
+   * Caption formatting mode
+   */
+  parseMode?: 'Markdown' | 'HTML';
+  /**
+   * Overrides the kind inferred from the file extension
+   */
+  kind?: MediaKind;
+  /**
+   * Which configured destination to use. Callers pick a route, never an ID.
+   */
+  route?: 'default' | 'permission';
+}
+
+/**
+ * Structured media failure
+ */
+export interface DmplzMediaError {
+  code: string;
+  message: string;
+  data?: { sizeBytes?: number; limitBytes?: number; path?: string };
+}
+
+/**
+ * Result of a media send: a message ID, or a structured error
+ */
+export type MediaSendResult = { messageId: string } | { error: DmplzMediaError };
 
 /**
  * Source type for rejection reason
@@ -86,6 +139,9 @@ export interface MessagingProvider {
    * Send a message
    */
   sendMessage(text: string, parseMode?: 'Markdown' | 'HTML'): Promise<void>;
+
+  /** Send a local file using a configured route. */
+  sendMedia(filePath: string, options?: MediaOptions): Promise<MediaSendResult>;
 
   /**
    * Send a message with reply keyboard buttons (buttons that auto-fill input)

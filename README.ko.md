@@ -126,6 +126,9 @@ Claude Code를 재시작하면 완료!
 | `DMPLZ_DISCORD_DM_USER_ID`       | 아니오 (Discord)            | 권한 요청을 DM으로 보낼 사용자 ID         |
 | `DMPLZ_PERMISSION_CHAT_ID`       | 아니오                      | 권한 요청을 보낼 별도 채팅/채널 ID        |
 | `DMPLZ_QUESTION_TIMEOUT_MS`      | 아니오 (기본값: `10800000`) | 응답 대기 시간 제한 (3시간)               |
+| `DMPLZ_MEDIA_ENABLED`            | 아니오 (기본값: `true`)     | 로컬 파일 첨부 도구 노출                  |
+| `DMPLZ_MEDIA_MAX_BYTES`          | 아니오                      | provider 첨부 용량 상한 재정의             |
+| `DMPLZ_MEDIA_TIMEOUT_MS`         | 아니오 (기본값: `120000`)   | 첨부 업로드 제한 시간                     |
 | `DMPLZ_REJECT_REASON_TIMEOUT_MS` | 아니오 (기본값: `600000`)   | 거부 사유 입력 대기 시간 제한 (10분)      |
 
 권한 요청은 `DMPLZ_PERMISSION_CHAT_ID`가 있으면 그 값을 우선 사용하고, 없으면 `DMPLZ_DISCORD_DM_USER_ID`(Discord 전용), 그것도 없으면 기본 채널/채팅으로 전송됩니다.
@@ -191,6 +194,65 @@ await send_notification({
   parse_mode: "Markdown", // 선택사항
 });
 ```
+
+### `send_media`
+
+로컬 파일을 첨부로 전송합니다. 스크린샷, 로그, 빌드 산출물, 녹화 영상 무엇이든 됩니다.
+
+```typescript
+await send_media({
+  file_path: "C:\\work\\bench.png", // 절대 경로만
+  caption: "p95 레이턴시 비교", // 선택사항
+});
+```
+
+전송 대상은 설정된 채팅/채널로 고정되어 있습니다. 도구 인자로 목적지를 바꿀 수 없습니다.
+
+용량 상한은 Telegram 50 MB, Discord 10 MiB이며 `DMPLZ_MEDIA_MAX_BYTES`로 조정합니다. 초과하면 업로드를 시도하지 않고 상한값과 함께 오류를 반환합니다. 30초 이하의 MP4는 Telegram에서 반복 재생되는 형태로 전송됩니다.
+
+---
+
+## 화면 증거 녹화 (선택 모듈)
+
+Claude가 GUI 작업을 하고 "완료했습니다"라고만 보고하면, 폰에 있는 사용자는 그 말을 검증할 방법이 없습니다. [airec](https://github.com/j-token/airec)와 함께 쓰면 작업 화면을 녹화해 영상으로 받을 수 있습니다.
+
+**이건 별도 설치입니다.** DM-Plz 본체에는 녹화 기능이 들어 있지 않고, 설치하지 않으면 아무것도 달라지지 않습니다.
+
+### 설치
+
+```powershell
+irm https://raw.githubusercontent.com/j-token/airec/main/install.ps1 | iex
+npx skills add j-token/dm-plz --skill dm-plz-evidence
+```
+
+첫 줄은 녹화기(Windows 10 2004+ / 11), 둘째 줄은 Claude가 언제 녹화하고 언제 보낼지 판단하는 스킬입니다. 둘 다 있어야 자동으로 동작합니다.
+
+### 제거
+
+```powershell
+npx skills remove dm-plz-evidence
+```
+
+DM-Plz 본체는 영향받지 않습니다.
+
+### 동작
+
+```
+사용자: (폰에서) "설치 마법사 끝까지 진행해줘"
+Claude: (녹화 시작 → 마법사 진행 → 녹화 종료)
+Claude: send_media(...)
+사용자: (폰에서 12초짜리 영상 재생 — 마우스 클릭이 화면에 표시됨)
+```
+
+캡션에는 재생 시간, 파일 크기, 그리고 녹화가 정상 종료됐는지 여부가 표시됩니다. 대상 창이 중간에 닫히는 등 비정상 종료된 녹화는 ⚠️ 표시와 함께 옵니다.
+
+### ⚠️ 알아두어야 할 것
+
+- **녹화본에는 화면에 있던 것이 전부 담깁니다.** 비밀번호, 토큰, 개인 메시지가 포함될 수 있고 자동으로 가려주지 않습니다.
+- **Telegram과 Discord는 종단간 암호화가 아닙니다.** 전송한 파일은 그쪽 서버에 남으며, 로컬에서 지워도 지워지지 않습니다.
+- **`DMPLZ_DISCORD_CHANNEL_ID`가 팀 채널이면 팀 전체가 봅니다.** 증거 녹화를 쓴다면 개인 DM 설정을 권장합니다.
+- UAC 보안 데스크톱과 DRM 보호 콘텐츠는 검은 화면으로 기록됩니다.
+- 현재 Windows만 지원합니다.
 
 ---
 

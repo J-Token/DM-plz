@@ -14,7 +14,12 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { createProvider } from './providers/index.js';
-import type { ServerConfig, MessagingProvider } from './types.js';
+import type {
+  ServerConfig,
+  MessagingProvider,
+  MediaKind,
+  MediaSendResult,
+} from './types.js';
 
 /**
  * Loads server configuration from environment variables.
@@ -56,14 +61,30 @@ function loadConfig(): ServerConfig {
   );
   const permissionChatId = process.env.DMPLZ_PERMISSION_CHAT_ID || undefined;
   const discordDmUserId = process.env.DMPLZ_DISCORD_DM_USER_ID || undefined;
+  // Invalid values fall back to the defaults rather than failing startup.
+  const mediaMaxBytes = Number(process.env.DMPLZ_MEDIA_MAX_BYTES);
+  const mediaTimeoutMs = Number(process.env.DMPLZ_MEDIA_TIMEOUT_MS || '120000');
 
   return {
     provider,
     botToken,
     chatId,
     questionTimeoutMs,
+    rejectReasonTimeoutMs: Number(process.env.DMPLZ_REJECT_REASON_TIMEOUT_MS || '600000'),
+    rejectReasonMaxChars: Number(process.env.DMPLZ_REJECT_REASON_MAX_CHARS || '300'),
+    rejectReasonLogPath: process.env.DMPLZ_REJECT_REASON_LOG_PATH || '',
+    rejectReasonLogRotateBytes: Number(
+      process.env.DMPLZ_REJECT_REASON_LOG_ROTATE_BYTES || '10485760'
+    ),
+    rejectReasonLogMaxFiles: Number(process.env.DMPLZ_REJECT_REASON_LOG_MAX_FILES || '10'),
+    rejectReasonNoReasonKeywords: (
+      process.env.DMPLZ_REJECT_REASON_NO_REASON_KEYWORDS || 'no_reason'
+    ).split(','),
     permissionChatId,
     discordDmUserId,
+    mediaEnabled: process.env.DMPLZ_MEDIA_ENABLED?.toLowerCase() !== 'false',
+    mediaMaxBytes: Number.isFinite(mediaMaxBytes) && mediaMaxBytes > 0 ? mediaMaxBytes : undefined,
+    mediaTimeoutMs: Number.isFinite(mediaTimeoutMs) && mediaTimeoutMs > 0 ? mediaTimeoutMs : 120000,
   };
 }
 
@@ -206,6 +227,33 @@ async function main() {
             required: ['message'],
           },
         },
+        ...(config.mediaEnabled
+          ? [
+              {
+                name: 'send_media',
+                description: `Send one local file via ${providerName}. Takes an absolute path and an optional caption; the destination always comes from server configuration. Install the optional airec skill for screen-evidence workflows.`,
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    file_path: {
+                      type: 'string',
+                      description: 'Absolute path to the local file.',
+                    },
+                    caption: {
+                      type: 'string',
+                      description: 'Optional caption shown with the attachment.',
+                    },
+                    kind: {
+                      type: 'string',
+                      enum: ['video', 'animation', 'document', 'photo'],
+                      description: 'Optional override for how the file is presented.',
+                    },
+                  },
+                  required: ['file_path'],
+                },
+              },
+            ]
+          : []),
       ],
     };
   });
@@ -230,6 +278,40 @@ async function main() {
               text: `Message sent successfully via ${providerName}.`,
             },
           ],
+        };
+      }
+
+      if (name === 'send_media') {
+        const { file_path, caption, kind } = args as {
+          file_path: string;
+          caption?: string;
+          kind?: MediaKind;
+        };
+
+        const result: MediaSendResult = config.mediaEnabled
+          ? await messagingProvider
+              .sendMedia(file_path, { caption, kind, parseMode: 'Markdown' })
+              .catch((error) => ({
+                error: {
+                  code: 'MEDIA_SEND_FAILED',
+                  message: error instanceof Error ? error.message : 'Unknown error',
+                },
+              }))
+          : {
+              error: {
+                code: 'MEDIA_DISABLED',
+                message: 'Media sending is disabled.',
+              },
+            };
+
+        const payload =
+          'error' in result
+            ? { error: result.error }
+            : { sent: true, message_id: result.messageId };
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify(payload) }],
+          ...('error' in result ? { isError: true } : {}),
         };
       }
 

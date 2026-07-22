@@ -4,6 +4,14 @@
  * Implements messaging through the Telegram Bot API.
  */
 
+import { basename, extname } from 'node:path';
+import {
+  DEFAULT_MEDIA_TIMEOUT_MS,
+  inspectMediaFile,
+  postMultipart,
+  readMp4DurationSec,
+  sliceForUpload,
+} from '../media.js';
 import type {
   MessagingProvider,
   ServerConfig,
@@ -14,7 +22,19 @@ import type {
   PermissionRequestContext,
   PermissionResponse,
   RejectReasonSource,
+  MediaOptions,
+  MediaSendResult,
+  MediaKind,
 } from '../types.js';
+
+/** Bot API upload ceiling for files sent by the bot */
+const TELEGRAM_UPLOAD_LIMIT_BYTES = 50_000_000;
+
+/** Maximum caption length accepted with an attachment */
+const TELEGRAM_CAPTION_LIMIT = 1024;
+
+/** MP4s at or under this length are sent as looping animations */
+const ANIMATION_MAX_DURATION_SEC = 30;
 
 interface RejectReasonResult {
   reason: string;
@@ -73,6 +93,101 @@ export class TelegramProvider implements MessagingProvider {
     }
 
     this.lastSentMessageId = data.result.message_id;
+  }
+
+  /**
+   * Sends a local file as an attachment.
+   * The destination comes from configuration; callers pick a route, not an ID.
+   */
+  async sendMedia(filePath: string, options: MediaOptions = {}): Promise<MediaSendResult> {
+    const limitBytes = this.config.mediaMaxBytes ?? TELEGRAM_UPLOAD_LIMIT_BYTES;
+    const inspected = await inspectMediaFile(filePath, limitBytes);
+    if ('error' in inspected) {
+      return inspected;
+    }
+    const { file } = inspected;
+
+    try {
+      const kind = options.kind ?? (await this.inferKind(filePath, file));
+
+      // Short MP4s go out as animations so Telegram loops them inline.
+      const route = options.route || 'default';
+      const chatId =
+        route === 'permission'
+          ? this.config.permissionChatId || this.config.chatId
+          : this.config.chatId;
+
+      const caption =
+        options.caption && options.caption.length > TELEGRAM_CAPTION_LIMIT
+          ? `${options.caption.slice(0, TELEGRAM_CAPTION_LIMIT - 1)}…`
+          : options.caption;
+
+      const fields: Record<string, string> = { chat_id: chatId };
+      if (caption) {
+        fields.caption = caption;
+      }
+      if (options.parseMode) {
+        fields.parse_mode = options.parseMode;
+      }
+
+      console.error(`Media upload: path=${filePath} size=${file.size} kind=${kind} route=${route}`);
+
+      const method = `send${kind[0].toUpperCase()}${kind.slice(1)}`;
+      const response = await postMultipart(
+        `${this.baseUrl}/${method}`,
+        {},
+        fields,
+        {
+          field: kind,
+          content: sliceForUpload(file),
+          name: basename(filePath),
+        },
+        this.config.mediaTimeoutMs ?? DEFAULT_MEDIA_TIMEOUT_MS
+      );
+
+      const data = JSON.parse(response.body) as TelegramResponse<TelegramMessage>;
+      if (response.status < 200 || response.status >= 300 || !data.ok) {
+        throw new Error(
+          `Telegram API error (${response.status}): ${data.description || 'Unknown error'}`
+        );
+      }
+
+      console.error(`Media sent: path=${filePath} messageId=${data.result.message_id}`);
+      return { messageId: String(data.result.message_id) };
+    } catch (error) {
+      const isTimeout = error instanceof Error && error.name === 'TimeoutError';
+      const message = error instanceof Error ? error.message : 'Unknown error';
+
+      console.error(`Media upload failed: path=${filePath} error=${message}`);
+
+      return {
+        error: {
+          code: isTimeout ? 'MEDIA_TIMEOUT' : 'MEDIA_SEND_FAILED',
+          message,
+          data: { path: filePath },
+        },
+      };
+    }
+  }
+
+  /**
+   * Picks the Telegram media kind from the file extension.
+   * MP4s are split by duration: Telegram loops animations, which suits short
+   * evidence clips but not long recordings.
+   */
+  private async inferKind(filePath: string, file: Blob): Promise<MediaKind> {
+    const ext = extname(filePath).toLowerCase();
+
+    if (ext === '.gif') {
+      return 'animation';
+    }
+    if (['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) {
+      return 'photo';
+    }
+    if (ext === '.mp4') {
+      return (await readMp4DurationSec(file)) <= ANIMATION_MAX_DURATION_SEC ? 'animation' : 'video';
+    }
+    return 'document';
   }
 
   /**

@@ -4,6 +4,13 @@
  * Implements messaging via the Discord Bot API.
  */
 
+import { basename } from 'node:path';
+import {
+  DEFAULT_MEDIA_TIMEOUT_MS,
+  inspectMediaFile,
+  postMultipart,
+  sliceForUpload,
+} from '../media.js';
 import type {
   MessagingProvider,
   ServerConfig,
@@ -13,7 +20,18 @@ import type {
   PermissionRequestContext,
   PermissionResponse,
   RejectReasonSource,
+  MediaOptions,
+  MediaSendResult,
 } from '../types.js';
+
+/**
+ * Default attachment ceiling for a server without boosts.
+ * Boosted guilds allow more; override with DMPLZ_MEDIA_MAX_BYTES.
+ */
+const DISCORD_UPLOAD_LIMIT_BYTES = 10 * 1024 * 1024;
+
+/** Maximum message content length */
+const DISCORD_CONTENT_LIMIT = 2000;
 
 interface RejectReasonResult {
   reason: string;
@@ -67,6 +85,85 @@ export class DiscordProvider implements MessagingProvider {
 
     const message = (await response.json()) as DiscordMessage;
     this.lastMessageId = message.id;
+  }
+
+  /**
+   * Sends a local file as an attachment.
+   * The destination comes from configuration; callers pick a route, not an ID.
+   */
+  async sendMedia(filePath: string, options: MediaOptions = {}): Promise<MediaSendResult> {
+    const limitBytes = this.config.mediaMaxBytes ?? DISCORD_UPLOAD_LIMIT_BYTES;
+    const inspected = await inspectMediaFile(filePath, limitBytes);
+    if ('error' in inspected) {
+      return inspected;
+    }
+    const { file } = inspected;
+
+    try {
+      const route = options.route || 'default';
+      const channelId =
+        route === 'permission'
+          ? await this.resolvePermissionChannelId()
+          : this.config.chatId;
+
+      const content =
+        options.caption && options.caption.length > DISCORD_CONTENT_LIMIT
+          ? `${options.caption.slice(0, DISCORD_CONTENT_LIMIT - 1)}…`
+          : options.caption;
+
+      const filename = basename(filePath);
+      const fields = {
+        payload_json: JSON.stringify({
+          content: content || '',
+          attachments: [{ id: '0', filename }],
+        }),
+      };
+      const upload = { field: 'files[0]', content: sliceForUpload(file), name: filename };
+
+      console.error(`Media upload: path=${filePath} size=${file.size} route=${route}`);
+
+      // One retry, to absorb a rate limit.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const response = await postMultipart(
+          `${this.baseUrl}/channels/${channelId}/messages`,
+          { Authorization: `Bot ${this.config.botToken}` },
+          fields,
+          upload,
+          this.config.mediaTimeoutMs ?? DEFAULT_MEDIA_TIMEOUT_MS
+        );
+
+        if (response.status === 429 && attempt === 0) {
+          const rateLimit = JSON.parse(response.body) as { retry_after?: number };
+          const waitMs = Math.max(0, rateLimit.retry_after || 1) * 1000;
+          console.error(`Media upload rate limited, retrying in ${waitMs}ms`);
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+          continue;
+        }
+
+        if (response.status < 200 || response.status >= 300) {
+          throw new Error(`Discord API error (${response.status}): ${response.body}`);
+        }
+
+        const message = JSON.parse(response.body) as DiscordMessage;
+        console.error(`Media sent: path=${filePath} messageId=${message.id}`);
+        return { messageId: message.id };
+      }
+
+      throw new Error('Discord rate limit retry exhausted.');
+    } catch (error) {
+      const isTimeout = error instanceof Error && error.name === 'TimeoutError';
+      const message = error instanceof Error ? error.message : 'Unknown error';
+
+      console.error(`Media upload failed: path=${filePath} error=${message}`);
+
+      return {
+        error: {
+          code: isTimeout ? 'MEDIA_TIMEOUT' : 'MEDIA_SEND_FAILED',
+          message,
+          data: { path: filePath },
+        },
+      };
+    }
   }
 
   /**
